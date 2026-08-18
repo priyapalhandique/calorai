@@ -66,10 +66,19 @@ def test_mock_env_series_plausible():
     source = MockDataSource()
     env = source.get_environmental_parameters("phoenix", "2026-08-18")
     assert len(env.hours) == 24
-    assert len(env.apparent_c) == 24
-    assert len(env.wet_bulb_c) == 24
+    assert 0.0 <= env.humidity_pct[0] <= 100.0
     assert max(env.solar_w_m2) > 700.0
     assert min(env.solar_w_m2) == 0.0
+    # Tier A atmosphere fields: wind, cloud, direct/diffuse decomposition.
+    assert all(0.0 <= w <= 12.0 for w in env.wind_speed_m_s)
+    assert max(env.wind_speed_m_s) > 0.0
+    assert all(0.0 <= c <= 100.0 for c in env.cloud_cover_pct)
+    assert all(0.0 <= p for p in env.precipitation_mm)
+    for total, direct, diffuse in zip(
+        env.solar_w_m2, env.direct_w_m2, env.diffuse_w_m2
+    ):
+        assert direct + diffuse == pytest.approx(total, abs=0.2)
+        assert direct >= diffuse >= 0.0
     # Wet bulb is never above dry bulb (apparent).
     assert all(w <= a + 1e-6 for w, a in zip(env.wet_bulb_c, env.apparent_c))
     assert 0.0 <= min(env.humidity_pct) <= max(env.humidity_pct) <= 100.0
@@ -126,6 +135,8 @@ def test_parse_env_live_schema():
                 "apparent_temperature_celsius": apparent,
                 "wet_bulb_temperature_celsius": [a - 17.0 for a in apparent],
                 "relative_humidity_percent": [22.9] * 24,
+                "cloud_cover_octas": [40.0] * 24,
+                "precipitation_mm": [0.0] * 24,
                 "co2_ppm": [None] * 24,
                 "heat_index_celsius": apparent,
             },
@@ -143,3 +154,10 @@ def test_parse_env_live_schema():
     assert env.solar_w_m2[12] == pytest.approx(576.92, rel=1e-3)  # peak at solar noon
     assert env.solar_w_m2[6] == 0.0
     assert env.solar_w_m2[19] == 0.0
+    # New fields: cloud + precipitation parsed; solar split into beam/diffuse
+    # using the API's real dni/dhi scalar ratio (691.43 / 777.04 ≈ 0.8898).
+    assert env.cloud_cover_pct[0] == pytest.approx(40.0)
+    assert env.precipitation_mm[0] == pytest.approx(0.0)
+    direct_frac = 691.43 / (691.43 + 85.61)
+    assert env.direct_w_m2[12] == pytest.approx(576.92 * direct_frac, rel=1e-3)
+    assert env.diffuse_w_m2[12] == pytest.approx(576.92 * (1 - direct_frac), rel=1e-3)

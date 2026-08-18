@@ -61,8 +61,10 @@ hours per cell of the audit day ({duration_risk} duration risk).
 
 - Every °C above traces to a physics equation and an API payload; no
   number is guessed.
-- Equations: Stefan-Boltzmann Q_rad = εσA(T⁴−T_amb⁴); Newton cooling
-  Q = h_c(T_s−T_air); albedo lever ΔT = Δα·G/H; WBGT = 0.7T_wb+0.3T_db.
+- Equations: Stefan-Boltzmann Q_rad = εσA(T⁴−T_sky⁴) with Brutsaert
+  sky emissivity (humidity + cloud); Newton cooling Q = h_c(T_s−T_air)
+  with wind-aware h_c; albedo lever ΔT = Δα·G/H;
+  WBGT = 0.7T_wb+0.2T_g+0.1T_db (globe estimated from solar load).
 - Units: °C throughout (API-native unless noted).
 - {provenance}
 {warnings_section}

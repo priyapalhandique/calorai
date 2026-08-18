@@ -58,6 +58,18 @@ Prizes: top-3 teams each win an Nvidia GPU; plus incubation, internships, API di
       recommendations** (Map Statistics payload empty, solar irradiance scalar, date-range messaging,
       silent `null` premium params, filter_type 1–4 vs 5, SPA docs, no credit preview, temp PDF links)
       → `docs/fortyguard-products.md` (they asked for product improvements)
+- [x] **Physics Tier A shipped** (73 tests): wind-aware h_c (McAdams; live API has no wind → calm
+      12 W/m²·K, mock exercises the wind path at h_c≈20), Brutsaert clear-sky emissivity + cloud-blended
+      sky temperature (live: Phoenix 14:00 sky 25.6 °C, air −15 K; cloud series now fetched), solar
+      geometry (declination/elevation/hour-angle/tilted-plane module), balance closure audit
+      (residual + implied h_c; live run honestly flags layers disagree: tile 39.8 < air 40.7 °C),
+      globe-estimated WBGT 0.7/0.2/0.1 (live 31.8 °C "extreme" vs two-term 28.5 "high" before),
+      humidex (44.9 °C live) + exposure dose, direct/diffuse solar split from real dni/dhi scalars.
+      Live headline intact: cool roofs −13.0 °C, solar share 97%
+- [ ] **Physics Tier B parked** (decide D2+): B1 street-canyon view factors + albedo paradox;
+      B2 peak-lag analysis (time_of_measure layer vs solar noon → effusivity fingerprint);
+      B3 latent heat (Priestley–Taylor ET for green mitigation); B4 sensitivity bands (±ΔT from
+      h_c/albedo uncertainty). All four sketched in session notes; not implemented.
 
 ## 3. Day-by-day plan (Aug 18 → Aug 30)
 

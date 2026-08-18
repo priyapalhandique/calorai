@@ -112,6 +112,7 @@ def energy_balance(
     storage_capacity_j_m2_k: float = 0.0,
     temperature_change_c: float = 0.0,
     time_span_hours: float = 1.0,
+    sky_temperature_c: float | None = None,
 ) -> SurfaceBudget:
     """Full street-level budget for one surface (per m²).
 
@@ -120,10 +121,13 @@ def energy_balance(
     environmental parameter, ``albedo``/``emissivity`` material
     properties, ``convective_coefficient`` an estimate for the street
     environment, and the storage terms come from the material slab.
+    ``sky_temperature_c`` (optional) replaces the air temperature as the
+    longwave sink — the Brutsaert sky model from ``radiation``.
     """
     q_sol = absorbed_solar_flux(irradiance_w_m2, albedo)
     q_lw = net_longwave_flux(
-        surface_temperature_c, air_temperature_c, emissivity
+        surface_temperature_c, air_temperature_c, emissivity,
+        sky_temperature_c=sky_temperature_c,
     )
     q_conv = convective_flux(
         surface_temperature_c, air_temperature_c, convective_coefficient
@@ -141,6 +145,101 @@ def energy_balance(
         storage=q_store,
         net_flux=net,
     )
+
+
+def implied_convective_coefficient(
+    surface_temperature_c: float,
+    air_temperature_c: float,
+    irradiance_w_m2: float,
+    albedo: float,
+    emissivity: float = 0.93,
+    storage_capacity_j_m2_k: float = 0.0,
+    temperature_change_c: float = 0.0,
+    time_span_hours: float = 1.0,
+    sky_temperature_c: float | None = None,
+) -> float:
+    """The h_c that closes the balance at the measured temperatures.
+
+    Rearranged Newton's law: h_c = (Q_sol − Q_lw − Q_store)/(T_s − T_air).
+    If the surface reads at or below air temperature the convective
+    term cannot close the balance (no driving gradient) — returns `inf`,
+    which itself is a finding.
+    """
+    q_sol = absorbed_solar_flux(irradiance_w_m2, albedo)
+    q_lw = net_longwave_flux(
+        surface_temperature_c, air_temperature_c, emissivity,
+        sky_temperature_c=sky_temperature_c,
+    )
+    q_store = storage_flux(
+        storage_capacity_j_m2_k, temperature_change_c, time_span_hours
+    )
+    gradient = surface_temperature_c - air_temperature_c
+    if gradient <= 0.0:
+        return float("inf")
+    return (q_sol - q_lw - q_store) / gradient
+
+
+def closure_analysis(
+    surface_temperature_c: float,
+    air_temperature_c: float,
+    irradiance_w_m2: float,
+    albedo: float,
+    emissivity: float = 0.93,
+    convective_coefficient: float = 12.0,
+    storage_capacity_j_m2_k: float = 0.0,
+    temperature_change_c: float = 0.0,
+    time_span_hours: float = 1.0,
+    sky_temperature_c: float | None = None,
+) -> dict:
+    """Does the energy balance close at the measured temperature?
+
+    The auditor's core promise: measured layers + physics must agree.
+    The residual is the balance's net flux; the implied h_c is the
+    convection the data "wants". A residual under 10% of the solar load
+    is reported as closed; a large residual means the inputs disagree
+    (layer mismatch, wrong material assumptions) — an honest audit
+    flag, not a bug.
+    """
+    q_sol = absorbed_solar_flux(irradiance_w_m2, albedo)
+    budget = energy_balance(
+        surface_temperature_c=surface_temperature_c,
+        air_temperature_c=air_temperature_c,
+        irradiance_w_m2=irradiance_w_m2,
+        albedo=albedo,
+        emissivity=emissivity,
+        convective_coefficient=convective_coefficient,
+        storage_capacity_j_m2_k=storage_capacity_j_m2_k,
+        temperature_change_c=temperature_change_c,
+        time_span_hours=time_span_hours,
+        sky_temperature_c=sky_temperature_c,
+    )
+    residual = budget.net_flux
+    relative = 100.0 * abs(residual) / max(abs(q_sol), 1e-9)
+    return {
+        "residual_w_m2": round(residual, 1),
+        "relative_residual_pct": round(relative, 1),
+        "implied_convective_coefficient": round(
+            implied_convective_coefficient(
+                surface_temperature_c=surface_temperature_c,
+                air_temperature_c=air_temperature_c,
+                irradiance_w_m2=irradiance_w_m2,
+                albedo=albedo,
+                emissivity=emissivity,
+                storage_capacity_j_m2_k=storage_capacity_j_m2_k,
+                temperature_change_c=temperature_change_c,
+                time_span_hours=time_span_hours,
+                sky_temperature_c=sky_temperature_c,
+            ),
+            1,
+        ),
+        "closed": relative < 10.0,
+        "note": (
+            "layers close within 10% of the solar load"
+            if relative < 10.0
+            else "residual exceeds 10% of solar load — inputs disagree; "
+            "check the layer stack or material assumptions"
+        ),
+    }
 
 
 def linearized_conductance(

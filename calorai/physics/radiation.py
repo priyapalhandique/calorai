@@ -24,21 +24,83 @@ STEFAN_BOLTZMANN = 5.670374419e-8
 SOLAR_CONSTANT = 1361.0
 
 
+def clear_sky_emissivity(
+    air_temperature_c: float,
+    relative_humidity_pct: float,
+) -> float:
+    """Clear-sky emissivity from humidity (Brutsaert, 1975).
+
+    ε_sky = 1.24 (e_a / T_a)^(1/7)
+
+    with e_a the near-surface vapor pressure in hPa and T_a in kelvin.
+    Dry desert air → low ε_sky (cold sky); humid air → higher ε_sky.
+    """
+    if relative_humidity_pct < 0.0 or relative_humidity_pct > 100.0:
+        raise ValueError("relative humidity must be in [0, 100]")
+    t_a = celsius_to_kelvin(air_temperature_c)
+    e_a = _vapor_pressure_hpa(air_temperature_c, relative_humidity_pct)
+    sky_emissivity = 1.24 * (e_a / t_a) ** (1.0 / 7.0)
+    return max(0.0, min(1.0, sky_emissivity))
+
+
+def sky_temperature_c(
+    air_temperature_c: float,
+    relative_humidity_pct: float,
+    cloud_fraction: float = 0.0,
+) -> float:
+    """Effective sky temperature (°C) seen by a horizontal surface.
+
+    Clear: T_sky = T_a · ε_sky^0.25 (well below T_a — the real
+    longwave sink). Clouds radiate near-air temperature, so the
+    effective emissivity is blended:
+
+        ε_eff = (1 − c) · ε_clear + c
+
+    Fully overcast skies push T_sky up toward T_a.
+    """
+    if not 0.0 <= cloud_fraction <= 1.0:
+        raise ValueError("cloud fraction must be in [0, 1]")
+    if relative_humidity_pct <= 0.0:
+        return air_temperature_c
+    epsilon = (1.0 - cloud_fraction) * clear_sky_emissivity(
+        air_temperature_c, relative_humidity_pct
+    ) + cloud_fraction
+    t_a = celsius_to_kelvin(air_temperature_c)
+    return t_a * epsilon**0.25 - 273.15
+
+
+def _vapor_pressure_hpa(air_temperature_c: float, relative_humidity_pct: float) -> float:
+    """Saturation-weighted near-surface vapor pressure e_a (hPa)."""
+    t = air_temperature_c
+    sat = 6.112 * math.exp(17.62 * t / (243.12 + t))
+    return sat * relative_humidity_pct / 100.0
+
+
 def net_longwave_flux(
     surface_temperature_c: float,
     ambient_temperature_c: float,
     emissivity: float = 0.93,
     area: float = 1.0,
+    sky_temperature_c: float | None = None,
 ) -> float:
     """Net longwave radiative flux leaving a grey surface (W).
 
-    Q_net = ε σ A (T_s⁴ − T_amb⁴)
+    Q_net = ε σ A (T_s⁴ − T_sky⁴)
 
     Positive means the surface is losing heat to its surroundings.
+    ``sky_temperature_c`` defaults to the ambient air temperature; for
+    night/deep-sky exchange use the Brutsaert sky model
+    (``sky_temperature_c`` in this module) — real skies sit far below
+    air temperature, and a surface facing the open sky cools against
+    them.
     """
     t_s = celsius_to_kelvin(surface_temperature_c)
-    t_a = celsius_to_kelvin(ambient_temperature_c)
-    return emissivity * STEFAN_BOLTZMANN * area * (t_s**4 - t_a**4)
+    t_amb = celsius_to_kelvin(
+        ambient_temperature_c
+        if sky_temperature_c is None
+        else sky_temperature_c
+    )
+    return emissivity * STEFAN_BOLTZMANN * area * (t_s**4 - t_amb**4)
 
 
 def absorbed_solar_flux(

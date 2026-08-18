@@ -58,6 +58,11 @@ class EnvSeries:
     apparent_c: list[float] = field(default_factory=list)
     humidity_pct: list[float] = field(default_factory=list)
     solar_w_m2: list[float] = field(default_factory=list)
+    direct_w_m2: list[float] = field(default_factory=list)
+    diffuse_w_m2: list[float] = field(default_factory=list)
+    wind_speed_m_s: list[float] = field(default_factory=list)
+    cloud_cover_pct: list[float] = field(default_factory=list)
+    precipitation_mm: list[float] = field(default_factory=list)
     heat_index_c: list[float] = field(default_factory=list)
     co2_ppm: list[float] = field(default_factory=list)
     source: str = "live"
@@ -70,6 +75,11 @@ class EnvSeries:
             "apparent_c": self._get(self.apparent_c, idx),
             "humidity_pct": self._get(self.humidity_pct, idx),
             "solar_w_m2": self._get(self.solar_w_m2, idx),
+            "direct_w_m2": self._get(self.direct_w_m2, idx),
+            "diffuse_w_m2": self._get(self.diffuse_w_m2, idx),
+            "wind_speed_m_s": self._get(self.wind_speed_m_s, idx),
+            "cloud_cover_pct": self._get(self.cloud_cover_pct, idx),
+            "precipitation_mm": self._get(self.precipitation_mm, idx),
             "heat_index_c": self._get(self.heat_index_c, idx),
         }
 
@@ -124,6 +134,11 @@ class DistrictSnapshot:
                 "apparent_c": [round(v, 1) for v in self.env.apparent_c],
                 "humidity_pct": [round(v, 1) for v in self.env.humidity_pct],
                 "solar_w_m2": [round(v, 1) for v in self.env.solar_w_m2],
+                "direct_w_m2": [round(v, 1) for v in self.env.direct_w_m2],
+                "diffuse_w_m2": [round(v, 1) for v in self.env.diffuse_w_m2],
+                "wind_speed_m_s": [round(v, 1) for v in self.env.wind_speed_m_s],
+                "cloud_cover_pct": [round(v, 1) for v in self.env.cloud_cover_pct],
+                "precipitation_mm": [round(v, 2) for v in self.env.precipitation_mm],
                 "heat_index_c": [round(v, 1) for v in self.env.heat_index_c],
                 "co2_ppm": [round(v, 1) for v in self.env.co2_ppm],
             }
@@ -147,6 +162,8 @@ class District:
     humidity_base_pct: float
     exceedance_threshold_c: float = 30.0
     night_persistence_hours: float = 12.0  # effective cooling time constant
+    wind_base_m_s: float = 2.5  # diurnal wind-floor for mock atmospheres
+    cloud_base_pct: float = 15.0  # mock sky cover, %
 
 
 #: US districts with distinct thermal personalities — all mock-safe.
@@ -154,27 +171,29 @@ DISTRICTS: dict[str, District] = {
     "phoenix": District(
         name="Phoenix, AZ", lat=33.4484, lon=-112.0740,
         base_mean_c=36.0, base_amplitude_c=8.0, heat_island_c=4.0,
-        albedo=0.12, humidity_base_pct=25.0,
+        albedo=0.12, humidity_base_pct=25.0, wind_base_m_s=2.2,
     ),
     "san-jose": District(
         name="San Jose, CA", lat=37.3382, lon=-121.8863,
         base_mean_c=26.0, base_amplitude_c=7.0, heat_island_c=3.0,
-        albedo=0.25, humidity_base_pct=45.0,
+        albedo=0.25, humidity_base_pct=45.0, wind_base_m_s=2.5,
     ),
     "manhattan": District(
         name="Lower Manhattan, NYC", lat=40.7110, lon=-74.0120,
         base_mean_c=28.0, base_amplitude_c=6.0, heat_island_c=5.0,
-        albedo=0.20, humidity_base_pct=60.0,
+        albedo=0.20, humidity_base_pct=60.0, wind_base_m_s=4.0,
+        cloud_base_pct=35.0,
     ),
     "chicago": District(
         name="Chicago, IL", lat=41.8781, lon=-87.6298,
         base_mean_c=24.0, base_amplitude_c=6.0, heat_island_c=3.5,
-        albedo=0.25, humidity_base_pct=55.0,
+        albedo=0.25, humidity_base_pct=55.0, wind_base_m_s=5.0,
+        cloud_base_pct=40.0,
     ),
     "austin": District(
         name="Austin, TX", lat=30.2672, lon=-97.7431,
         base_mean_c=33.0, base_amplitude_c=7.0, heat_island_c=3.0,
-        albedo=0.18, humidity_base_pct=50.0,
+        albedo=0.18, humidity_base_pct=50.0, wind_base_m_s=3.0,
     ),
 }
 
@@ -306,12 +325,27 @@ class MockDataSource:
         ]
         heat_index = [w + (a - w) * 0.55 for a, w in zip(apparent, wet_bulb)]
         co2 = [418 + 8.0 * math.sin(math.pi * (h - 6) / 12.0) for h in hours]
+        wind = [
+            max(0.0, district.wind_base_m_s + 1.5 * math.sin(math.pi * (h - 8) / 12.0))
+            for h in hours
+        ]
+        cloud = [
+            max(0.0, min(100.0, district.cloud_base_pct + 8.0 * math.sin(math.pi * h / 12.0)))
+            for h in hours
+        ]
+        direct = [round(v * 0.85, 1) for v in solar]
+        diffuse = [round(v * 0.15, 1) for v in solar]
         return EnvSeries(
             hours=hours,
             wet_bulb_c=[round(v, 2) for v in wet_bulb],
             apparent_c=[round(v, 2) for v in apparent],
             humidity_pct=[round(v, 1) for v in humidity],
             solar_w_m2=[round(v, 1) for v in solar],
+            direct_w_m2=direct,
+            diffuse_w_m2=diffuse,
+            wind_speed_m_s=[round(v, 1) for v in wind],
+            cloud_cover_pct=[round(v, 1) for v in cloud],
+            precipitation_mm=[0.0] * 24,
             heat_index_c=[round(v, 1) for v in heat_index],
             co2_ppm=[round(v, 1) for v in co2],
             source=self.source_name,
@@ -561,6 +595,7 @@ class LiveFortyGuardSource:
             district=district_name,
             date=date,
             temperature_anchor_c=temperature_anchor_c,
+            schema_version=2,  # v2 adds cloud/precipitation/direct-diffuse
         )
         cached = self._cached(key)
         if cached and cached.get("apparent_c"):
@@ -571,10 +606,15 @@ class LiveFortyGuardSource:
                 "apparent_c",
                 "humidity_pct",
                 "solar_w_m2",
+                "direct_w_m2",
+                "diffuse_w_m2",
+                "wind_speed_m_s",
+                "cloud_cover_pct",
+                "precipitation_mm",
                 "heat_index_c",
                 "co2_ppm",
             ):
-                setattr(env, field_name, cached[field_name])
+                setattr(env, field_name, cached.get(field_name, []))
             return env
         anchor = temperature_anchor_c or (self.get_heatmap(district_name, date).mean)
         response = self.client.environmental_parameters(
@@ -587,6 +627,8 @@ class LiveFortyGuardSource:
                 "wet_bulb_temperature_celsius",
                 "apparent_temperature_celsius",
                 "relative_humidity_percent",
+                "cloud_cover_octas",
+                "precipitation_mm",
                 "solar_irradiance",
                 "heat_index_celsius",
                 "co2_ppm",
@@ -605,6 +647,11 @@ class LiveFortyGuardSource:
                 "apparent_c": env.apparent_c,
                 "humidity_pct": env.humidity_pct,
                 "solar_w_m2": env.solar_w_m2,
+                "direct_w_m2": env.direct_w_m2,
+                "diffuse_w_m2": env.diffuse_w_m2,
+                "wind_speed_m_s": env.wind_speed_m_s,
+                "cloud_cover_pct": env.cloud_cover_pct,
+                "precipitation_mm": env.precipitation_mm,
                 "heat_index_c": env.heat_index_c,
                 "co2_ppm": env.co2_ppm,
             },
@@ -630,6 +677,8 @@ class LiveFortyGuardSource:
             "wet_bulb_c": params.get("wet_bulb_temperature_celsius"),
             "apparent_c": params.get("apparent_temperature_celsius"),
             "humidity_pct": params.get("relative_humidity_percent"),
+            "cloud_cover_pct": params.get("cloud_cover_octas"),
+            "precipitation_mm": params.get("precipitation_mm"),
             "heat_index_c": params.get("heat_index_celsius"),
             "co2_ppm": params.get("co2_ppm"),
         }
@@ -638,13 +687,22 @@ class LiveFortyGuardSource:
                 setattr(env, field, [float(v) for v in values if v is not None])
         n = len(env.apparent_c) or 24
         env.hours = list(range(n))
-        ghi = _num((locations[0].get("solar_irradiance") or {}).get("clear_sky") or {}, "ghi")
+        sun = (locations[0].get("solar_irradiance") or {}).get("clear_sky") or {}
+        ghi = _num(sun, "ghi")
         if ghi and ghi > 0.0:
-            env.solar_w_m2 = [
-                round(max(0.0, ghi * math.sin(math.pi * (h - 6) / 12.0)), 1)
-                if 6 <= h <= 18 else 0.0
+            profile = [
+                max(0.0, math.sin(math.pi * (h - 6) / 12.0)) if 6 <= h <= 18 else 0.0
                 for h in range(n)
             ]
+            env.solar_w_m2 = [round(ghi * p, 1) for p in profile]
+            # The API reports clear-sky ghi/dni/dhi aggregate scalars; use
+            # their ratios to split the hour-level load into beam (direct)
+            # and diffuse components.
+            dni = _num(sun, "dni")
+            dhi = _num(sun, "dhi")
+            direct_frac = dni / (dni + dhi) if (dni or 0.0) + (dhi or 0.0) > 0.0 else 0.85
+            env.direct_w_m2 = [round(ghi * p * direct_frac, 1) for p in profile]
+            env.diffuse_w_m2 = [round(ghi * p * (1.0 - direct_frac), 1) for p in profile]
         if not env.wet_bulb_c and env.apparent_c:
             env.wet_bulb_c = [a - 6.0 for a in env.apparent_c]
         return env

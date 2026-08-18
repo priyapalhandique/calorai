@@ -32,13 +32,15 @@ from .narrator import make_narrator
 from .physics import (
     MATERIALS,
     albedo_delta_temperature,
+    closure_analysis,
+    convective_coefficient_from_wind,
     energy_balance,
     exposure_risk,
-    heat_stress_level,
+    humidex,
     overnight_retention_ratio,
     shade_delta_temperature,
+    sky_temperature_c,
     storage_capacity,
-    wbgt,
 )
 
 #: Default envelope assumptions for the audit hour (physics constants).
@@ -98,11 +100,30 @@ class AuditAgent:
             "apparent_c": heatmap.mean,
             "wet_bulb_c": heatmap.mean - 6.0,
             "solar_w_m2": 850.0,
+            "wind_speed_m_s": 0.0,
+            "cloud_cover_pct": 0.0,
         }
         hottest = max(heatmap.tiles, key=lambda t: t["value"])
         surface_c = hottest["value"]
         air_c = hour_env["apparent_c"]
         irradiance = hour_env["solar_w_m2"]
+        wind = max(hour_env.get("wind_speed_m_s", 0.0) or 0.0, 0.0)
+        cloud_pct = min(max(hour_env.get("cloud_cover_pct", 0.0) or 0.0, 0.0), 100.0)
+        humidity_pct = hour_env.get("humidity_pct", 0.0) or 0.0
+        # Wind-aware convection: live API exposes no wind series, so calm
+        # conditions (12 W/m²·K) apply there; the mock atmosphere has wind.
+        h_c = (
+            convective_coefficient_from_wind(wind)
+            if wind > 0.0
+            else CONVECTIVE_COEFFICIENT
+        )
+        # The longwave sink is the sky, not the air: Brutsaert clear-sky
+        # emissivity from humidity, blended with the cloud fraction.
+        sky_c = (
+            sky_temperature_c(air_c, humidity_pct, cloud_pct / 100.0)
+            if humidity_pct > 0.0
+            else None
+        )
 
         budget = energy_balance(
             surface_temperature_c=surface_c,
@@ -110,12 +131,13 @@ class AuditAgent:
             irradiance_w_m2=irradiance,
             albedo=self.district.albedo,
             emissivity=EMISSIVITY_DEFAULT,
-            convective_coefficient=CONVECTIVE_COEFFICIENT,
+            convective_coefficient=h_c,
             storage_capacity_j_m2_k=storage_capacity(
                 2200.0, 920.0, SLAB_THICKNESS_M
             ),
             temperature_change_c=self.district.base_amplitude_c,
             time_span_hours=6.0,
+            sky_temperature_c=sky_c,
         )
         attribution = budget.attribution()
 
@@ -123,20 +145,40 @@ class AuditAgent:
         exceedance_hrs = excess.mean if excess else 0.0
         exposure = exposure_risk(
             wet_bulb_celsius=hour_env["wet_bulb_c"],
-            dry_bulb_celsius=surface_c,
+            dry_bulb_celsius=air_c,
             exceedance_hours=exceedance_hrs,
             threshold_celsius=req.threshold_c,
+            irradiance_w_m2=irradiance,
+            wind_speed_m_s=wind,
         )
         exposure["exceedance_hours"] = round(exceedance_hrs, 2)
+        if humidity_pct > 0.0:
+            exposure["humidex_c"] = round(humidex(air_c, humidity_pct), 1)
 
         tau = self.district.night_persistence_hours
         retention = overnight_retention_ratio(tau)
         effusivity = _effusivity_for(self.district.albedo)
 
+        closure = closure_analysis(
+            surface_temperature_c=surface_c,
+            air_temperature_c=air_c,
+            irradiance_w_m2=irradiance,
+            albedo=self.district.albedo,
+            emissivity=EMISSIVITY_DEFAULT,
+            convective_coefficient=h_c,
+            storage_capacity_j_m2_k=storage_capacity(
+                2200.0, 920.0, SLAB_THICKNESS_M
+            ),
+            temperature_change_c=self.district.base_amplitude_c,
+            time_span_hours=6.0,
+            sky_temperature_c=sky_c,
+        )
+
         interventions = self._prescribe(
             irradiance=irradiance,
             surface_c=surface_c,
             exceedance_hrs=exceedance_hrs,
+            convective_coefficient=h_c,
         )
 
         report: dict[str, Any] = {
@@ -177,18 +219,26 @@ class AuditAgent:
                     snapshot.persistence.max if snapshot.persistence else None
                 ),
             },
+            "atmosphere": {
+                "air_temperature_c": round(air_c, 2),
+                "wind_speed_m_s": round(wind, 2),
+                "cloud_cover_pct": round(cloud_pct, 1),
+                "relative_humidity_pct": round(humidity_pct, 1),
+                "sky_temperature_c": round(sky_c, 1) if sky_c is not None else None,
+                "convective_coefficient": round(h_c, 1),
+            },
+            "closure": closure,
             "exposure": {
                 **exposure,
-                "wbgt_c": round(
-                    wbgt(hour_env["wet_bulb_c"], surface_c), 2
-                ),
+                "wbgt_c": round(exposure["wbgt_c"], 2),
             },
             "interventions": interventions,
             "provenance": (
                 f"temperature layer: {snapshot.source}; "
                 f"env series: {snapshot.env.source if snapshot.env else 'n/a'}; "
-                f"equations: Stefan-Boltzmann, Newton's law, ΔT = ΔQ/H, WBGT; "
-                f"units: °C"
+                f"equations: Stefan-Boltzmann with Brutsaert sky (humidity + cloud), "
+                f"Newton's law (wind-aware h_c), ΔT = ΔQ/H, "
+                f"WBGT = 0.7T_wb+0.2T_g+0.1T_db (globe from solar load); units: °C"
             ),
             "warnings": snapshot.warnings,
         }
@@ -199,7 +249,11 @@ class AuditAgent:
     # ------------------------------------------------------------ prescribe
 
     def _prescribe(
-        self, irradiance: float, surface_c: float, exceedance_hrs: float
+        self,
+        irradiance: float,
+        surface_c: float,
+        exceedance_hrs: float,
+        convective_coefficient: float = CONVECTIVE_COEFFICIENT,
     ) -> list[dict[str, Any]]:
         """Ranked interventions with quantified °C, best first."""
         albedo_old = self.district.albedo
@@ -209,7 +263,7 @@ class AuditAgent:
             albedo_after=0.60,
             surface_temperature_c=surface_c,
             emissivity=EMISSIVITY_DEFAULT,
-            convective_coefficient=CONVECTIVE_COEFFICIENT,
+            convective_coefficient=convective_coefficient,
         )
         trees = shade_delta_temperature(
             irradiance_w_m2=irradiance,
@@ -217,7 +271,7 @@ class AuditAgent:
             shade_fraction=0.50,
             surface_temperature_c=surface_c,
             emissivity=EMISSIVITY_DEFAULT,
-            convective_coefficient=CONVECTIVE_COEFFICIENT,
+            convective_coefficient=convective_coefficient,
         )
         concrete = albedo_delta_temperature(
             irradiance_w_m2=irradiance,
@@ -225,14 +279,17 @@ class AuditAgent:
             albedo_after=0.35,
             surface_temperature_c=surface_c,
             emissivity=EMISSIVITY_DEFAULT,
-            convective_coefficient=CONVECTIVE_COEFFICIENT,
+            convective_coefficient=convective_coefficient,
         )
         interventions = [
             {
                 "name": "Cool roofs on hottest tiles (albedo 0.12→0.60)",
                 "delta_t_c": cool["delta_temperature_c"],
                 "removed_flux_w_m2": cool["removed_flux_w_m2"],
-                "basis": f"ΔT = Δα·G/H at G={irradiance:.0f} W/m², H from Stefan-Boltzmann + h_c={CONVECTIVE_COEFFICIENT}",
+                "basis": (
+                    f"ΔT = Δα·G/H at G={irradiance:.0f} W/m², "
+                    f"H from Stefan-Boltzmann + h_c={convective_coefficient:.1f}"
+                ),
                 "scope": "top 20% tiles by peak temperature",
             },
             {

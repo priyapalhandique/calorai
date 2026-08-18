@@ -78,6 +78,17 @@ Handbook documents `filter_type 5` (single month); docs site lists 1–4 only. A
 (`tcm`/`time_of_measure`/`exceedance`/`persistence`) are sparse in both. Recommend a single canonical
 reference (curated API docs we extracted demonstrate it can be a ~100-line markdown file).
 
+### P2-4. No wind-speed parameter — and cloud units are mislabeled
+Full default `env_params` probe (2026-08-18, no `analysis` restriction) returns 15 parameter
+families — **wind speed is not among them**, which blocks convective modeling (we fall back to a
+calm-conditions coefficient and exercise wind physics only in our mock). Meanwhile
+`cloud_cover_octas` ships 0–100 *percent* values under an octas name (e.g. 43, 98, 85 within the
+same night), and `elevation`/`methane_ppb`/`co2_ppm` come back empty on the Hackathon plan.
+Recommend a `wind_speed_m_s` series (the sky model and convective losses are the largest single
+sources of uncertainty in urban heat budgets) and either octas 0–8 or percent semantics, clearly
+named.
+*Evidence: probe payload `probe_env_full.json`; live env cache.*
+
 ### P3-1. Docs are a heavy Angular SPA; no curl-able reference
 The entire API reference lives in a 1.6 MB JS bundle behind `docs-api.fortyguard.com/docs`. A static
 markdown/OpenAPI reference would remove a huge hurdle for the developer personas you advertise.
@@ -104,7 +115,8 @@ long-lived download endpoint keyed by `activity_id`) would fit automated pipelin
 ## 5. How calorai used/uses the API (relevance)
 
 1. `POST /v1/heatmap` (Basic, tcm) → per-tile °C layers for the energy-balance engine
-2. `POST /v1/env_params` (Basic) → air temp, humidity, wind, solar (scalar workaround: solar geometry)
+2. `POST /v1/env_params` (Basic) → air temp, humidity, wet-bulb, **cloud cover, precipitation** +
+   **beam/diffuse solar split anchored to the real dni/dhi scalar ratio**
 3. `GET /v1/status` → polling + **n_cells** for coverage QA
 4. `GET /v1/system/fetch-api-key-usage` → budget dashboard in the UI
 5. Whole pipeline is auditable (every live call logged with credits) — matches Track 6 agentic brief
