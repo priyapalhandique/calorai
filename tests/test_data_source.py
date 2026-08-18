@@ -4,6 +4,7 @@ import pytest
 
 from calorai.data_source import (
     DISTRICTS,
+    LiveFortyGuardSource,
     MockDataSource,
     get_district,
     resolve_source,
@@ -98,3 +99,47 @@ def test_resolve_source_mock_forced():
     source, mode = resolve_source("mock")
     assert mode == "mock"
     assert isinstance(source, MockDataSource)
+
+
+def test_parse_env_live_schema():
+    """Regression fixture shaped exactly like a real environmental_parameters
+    completion: locations[].parameters is a flat name -> 24-h series dict,
+    solar_irradiance carries only a single clear-sky ghi aggregate, and some
+    series contain None placeholders (e.g. premium-only co2_ppm)."""
+    hours = list(range(24))
+    apparent = [32.0, 31.7, 32.2, 33.1, 34.6, 36.8, 38.9, 40.1, 40.6,
+                40.7, 40.9, 41.0, 40.8, 40.6, 40.1, 39.4, 38.6, 37.5,
+                36.3, 35.2, 34.1, 33.2, 32.6, 32.1]
+    payload = {
+        "metadata": {
+            "timezone": "America/Phoenix",
+            "timezone_offset_hours": -7,
+            "time_range": {"start": "2024-07-15T00:00:00-07:00",
+                           "end": "2024-07-15T23:00:00-07:00",
+                           "interval": "1h", "count": 24},
+            "timestamps": [f"2024-07-15T{h:02d}:00:00-07:00" for h in hours],
+        },
+        "locations": [{
+            "lat": 33.4484, "lon": -112.0740, "elevation": 331.2,
+            "temperature": 39.68,
+            "parameters": {
+                "apparent_temperature_celsius": apparent,
+                "wet_bulb_temperature_celsius": [a - 17.0 for a in apparent],
+                "relative_humidity_percent": [22.9] * 24,
+                "co2_ppm": [None] * 24,
+                "heat_index_celsius": apparent,
+            },
+            "solar_irradiance": {"clear_sky": {"ghi": 576.92, "dni": 691.43,
+                                               "dhi": 85.61},
+                                 "description": "clear-sky aggregate"},
+        }],
+    }
+    env = LiveFortyGuardSource._parse_env(payload)
+    assert len(env.hours) == 24
+    assert env.apparent_c[14] == pytest.approx(40.1)
+    assert len(env.wet_bulb_c) == 24
+    assert env.humidity_pct[0] == pytest.approx(22.9)
+    assert env.co2_ppm == []  # all-None series dropped, not crashed
+    assert env.solar_w_m2[12] == pytest.approx(576.92, rel=1e-3)  # peak at solar noon
+    assert env.solar_w_m2[6] == 0.0
+    assert env.solar_w_m2[19] == 0.0

@@ -154,9 +154,9 @@ class AuditAgent:
             "snapshot": {
                 "hour": req.hour,
                 "n_cells": heatmap.n_cells,
-                "min_c": heatmap.min,
-                "mean_c": heatmap.mean,
-                "max_c": heatmap.max,
+                "min_c": round(heatmap.min, 2),
+                "mean_c": round(heatmap.mean, 2),
+                "max_c": round(heatmap.max, 2),
                 "hottest_tile": {k: round(v, 3) for k, v in hottest.items()},
             },
             "attribution": {

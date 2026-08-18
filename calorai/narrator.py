@@ -103,7 +103,7 @@ class TemplateNarrator:
             "A tight spread: this district behaves as one thermal unit."
         )
         attribution_rows = "\n".join(
-            f"| {label.replace('_', ' ').title()} | {share:.0f}% | {flux:+.0f} W/m² |"
+            f"| {label.replace('_', ' ').title()} | {max(share, 0.0):.0f}% | {flux:+.0f} W/m² |"
             for label, share, flux in (
                 ("solar_absorption", attribution["solar_share"], attribution["solar_flux"]),
                 ("longwave_retention", attribution["longwave_share"], attribution["longwave_flux"]),

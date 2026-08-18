@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>calorai — City Heat-Budget Auditor</title>
+<style>
+  :root { --bg:#0b1220; --panel:#111a2e; --line:#1f2c47; --text:#e6ecf7; --muted:#8fa3c0;
+          --accent:#ffb454; --hot:#ff5d5d; --cool:#5db9ff; --ok:#4cd98d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; align-items:baseline; gap:14px; padding:18px 24px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:22px; letter-spacing:.4px; }
+  h1 .dot { color:var(--accent); }
+  header small { color:var(--muted); }
+  .container { display:grid; grid-template-columns:320px 1fr; gap:18px; padding:18px 24px; align-items:start; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  input,select { width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line);
+                 background:#0d1526; color:var(--text); font-size:14px; }
+  button { margin-top:16px; width:100%; padding:10px; border:0; border-radius:8px;
+           background:linear-gradient(90deg,#ff8c42,#ffb454); color:#14100a; font-weight:700;
+           font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  #status { font-size:12px; color:var(--muted); margin-top:10px; min-height:16px; }
+  #report { white-space:normal; line-height:1.55; font-size:14.5px; }
+  #report h1,#report h2,#report h3 { color:var(--accent); margin:1.2em 0 .4em; }
+  #report h1 { font-size:20px; } #report h2 { font-size:17px; } #report h3 { font-size:15px; }
+  #report table { border-collapse:collapse; width:100%; margin:8px 0; font-size:13.5px; }
+  #report th,#report td { border:1px solid var(--line); padding:6px 10px; text-align:left; }
+  #report th { background:#0d1526; color:var(--muted); }
+  #report blockquote { border-left:3px solid var(--accent); margin:10px 0; padding:4px 12px; color:var(--muted); }
+  #report strong { color:var(--text); }
+  .spinner { border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%;
+             width:18px; height:18px; display:inline-block; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (max-width:900px) { .container { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>calorai<span class="dot">.</span> — city heat-budget auditor</h1>
+  <small>physics-first · FortyGuard Temperature API · Hackathon'26</small>
+</header>
+<div class="container">
+  <aside class="panel">
+    <label for="district">District</label>
+    <select id="district"></select>
+    <label for="date">Date (catalog 2021–today, US coverage)</label>
+    <input id="date" type="date" value="2024-07-15">
+    <label for="hour">Audit hour (local)</label>
+    <select id="hour"></select>
+    <label for="threshold">Exceedance threshold °C</label>
+    <input id="threshold" type="number" min="20" max="50" step="0.5" value="30">
+    <label for="source">Data source</label>
+    <select id="source">
+      <option value="auto">auto (live → mock fallback)</option>
+      <option value="mock">mock (offline demo)</option>
+    </select>
+    <label for="narration">Narration</label>
+    <select id="narration">
+      <option value="auto">auto (GitHub Models → template)</option>
+      <option value="template">template (deterministic)</option>
+      <option value="none">none (raw JSON)</option>
+    </select>
+    <button id="run">Run audit</button>
+    <div id="status"></div>
+  </aside>
+  <main class="panel"><div id="report">Pick a district and run an audit — every °C comes
+    from a physics equation and real FortyGuard data.</div></main>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const md = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+  .replace(/^###### (.*)$/gm,"<h6>$1</h6>").replace(/^##### (.*)$/gm,"<h5>$1</h5>")
+  .replace(/^#### (.*)$/gm,"<h4>$1</h4>").replace(/^### (.*)$/gm,"<h3>$1</h3>")
+  .replace(/^## (.*)$/gm,"<h2>$1</h2>").replace(/^# (.*)$/gm,"<h1>$1</h1>")
+  .replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\*(.*?)\*/g,"<em>$1</em>")
+  .replace(/^> (.*)$/gm,"<blockquote>$1</blockquote>")
+  .replace(/\|([^\n]+)\|\n/g, row => {
+    const cells = row.split("|").slice(1,-2).map(c => c.trim());
+    if (!cells.length) return "";
+    const isHeader = /^[-: ]+$/.test(cells.join(""));
+    if (isHeader) return "";
+    return "<tr>" + cells.map(c => `<td>${c}</td>`).join("") + "</tr>";
+  })
+  .replace(/(<tr>.*<\/tr>\n?)(?=<tr>)/g, m => m); // keep rows; header handled below
+async function loadDistricts() {
+  const res = await fetch("/api/districts");
+  const list = await res.json();
+  $("district").innerHTML = list.map(d =>
+    `<option value="${d.key}">${d.name} (mean ${d.base_mean_c} °C)</option>`).join("");
+}
+for (let h = 0; h <= 23; h++) $("hour").innerHTML += `<option value="${h}"${h===14?" selected":""}>${String(h).padStart(2,"0")}:00</option>`;
+$("run").onclick = async () => {
+  const btn = $("run"); btn.disabled = true; $("status").innerHTML = '<span class="spinner"></span> computing…';
+  try {
+    const res = await fetch("/api/audit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        district: $("district").value, date: $("date").value,
+        hour: +$("hour").value, threshold_c: +$("threshold").value,
+        source: $("source").value, narration: $("narration").value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { $("report").innerHTML = `<h2>Error</h2><p>${md(data.detail||"failed")}</p>`; return; }
+    const narrative = data.narrative || ("<pre>" + md(JSON.stringify(data,null,2)) + "</pre>");
+    $("report").innerHTML = md(narrative);
+    $("status").textContent = `source: ${data.source} · ${data.pipeline}`;
+  } catch (e) {
+    $("report").innerHTML = `<h2>Network error</h2><p>${md(String(e))}</p>`;
+  } finally { btn.disabled = false; }
+};
+loadDistricts();
+</script>
+</body>
+</html>

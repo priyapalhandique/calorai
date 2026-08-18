@@ -421,18 +421,14 @@ class LiveFortyGuardSource:
 
     @staticmethod
     def _parse_tiles(result: dict, analytic_type: str) -> tuple[list[dict], float, float, float]:
-        """Read tile values and stats defensively from either schema."""
+        """Read tile values and stats defensively from either schema.
+
+        Live responses for ``tcm`` historically omit aggregate stats (only
+        ``activity_id`` + ``n_cells``) — never trust the absence; fall back
+        to computing min/mean/max from the tile values themselves.
+        """
         has_map = isinstance(result, dict) and isinstance(result.get("map_data"), dict)
         stats = result.get("stats_data") or {}
-        if analytic_type == "tcm":
-            temp_stats = stats.get("temperature_stats") or stats
-            min_v = _num(temp_stats, "min")
-            mean_v = _num(temp_stats, "mean")
-            max_v = _num(temp_stats, "max")
-        else:
-            min_v = _num(stats, "min")
-            mean_v = _num(stats, "mean")
-            max_v = _num(stats, "max")
         tiles: list[dict[str, float]] = []
         if has_map:
             features = result["map_data"].get("features") or []
@@ -445,10 +441,23 @@ class LiveFortyGuardSource:
                     value = _num(props, "average_temperature") or _num(
                         props, "temperature"
                     )
+                    if value is not None:
+                        value = normalize_celsius(value)
                 else:
                     value = _num(props, "value")
                 if value is not None and center:
                     tiles.append({"lat": center[1], "lon": center[0], "value": round(value, 2)})
+        values = [t["value"] for t in tiles]
+        min_v = _num(stats, "min")
+        mean_v = _num(stats, "mean")
+        max_v = _num(stats, "max")
+        if analytic_type == "tcm":
+            temp_stats = stats.get("temperature_stats") or {}
+            min_v = _num(temp_stats, "min")
+            mean_v = _num(temp_stats, "mean")
+            max_v = _num(temp_stats, "max")
+        if min_v is None and values:
+            min_v, max_v, mean_v = min(values), max(values), sum(values) / len(values)
         return tiles, min_v, mean_v, max_v
 
     def get_heatmap(
@@ -508,10 +517,12 @@ class LiveFortyGuardSource:
         )
         result = response["result"] if isinstance(response, dict) else response
         tiles, min_v, mean_v, max_v = self._parse_tiles(result, analytic_type)
-        if analytic_type == "tcm" and tiles:
-            # API has historically mixed °F/°C in tile labels — normalize.
-            for tile in tiles:
-                tile["value"] = round(normalize_celsius(tile["value"]), 2)
+        if analytic_type == "tcm":
+            # Normalize aggregate stats to °C like the tiles above.
+            min_v, mean_v, max_v = [
+                normalize_celsius(v) if v is not None else None
+                for v in (min_v, mean_v, max_v)
+            ]
         units = "celsius" if analytic_type == "tcm" else "hour"
         layer = HeatmapLayer(
             analytic_type=analytic_type,
@@ -552,7 +563,7 @@ class LiveFortyGuardSource:
             temperature_anchor_c=temperature_anchor_c,
         )
         cached = self._cached(key)
-        if cached:
+        if cached and cached.get("apparent_c"):
             env = EnvSeries(source="live-cached")
             env.hours = cached["hours"]
             for field_name in (
@@ -602,35 +613,40 @@ class LiveFortyGuardSource:
 
     @staticmethod
     def _parse_env(result: dict) -> EnvSeries:
+        """Parse the verified live schema.
+
+        ``result.locations[].parameters`` is a flat dict of *name → 24-h
+        series*. ``solar_irradiance`` is *not* a series — it carries a
+        single clear-sky ``ghi`` (W/m²) aggregate, so the diurnal solar
+        curve is re-synthesized as a sine profile peaking at solar noon
+        with amplitude anchored to that API-provided ghi.
+        """
         env = EnvSeries()
-        metadata = result.get("metadata") or {}
-        for location in result.get("locations") or []:
-            for source_block in location.get("sources") or []:
-                for param_block in source_block.get("parameters") or []:
-                    name = param_block.get("name") or param_block.get("label", "")
-                    series = param_block.get("values") or param_block.get("data") or []
-                    if not series:
-                        continue
-                    if isinstance(series[0], dict):
-                        series = [v.get("value", v.get("v")) for v in series]
-                    series = [float(v) for v in series if v is not None]
-                    if "wet_bulb" in name:
-                        env.wet_bulb_c = series
-                    elif "apparent" in name:
-                        env.apparent_c = series
-                    elif "humidity" in name:
-                        env.humidity_pct = series
-                    elif "solar" in name or "irradiance" in name:
-                        env.solar_w_m2 = series
-                    elif "heat_index" in name:
-                        env.heat_index_c = series
-                    elif "co2" in name:
-                        env.co2_ppm = series
-        sources = metadata.get("timestamps") or metadata.get("date_time") or []
-        if isinstance(sources, list) and len(sources) == 24 and env.apparent_c:
-            env.hours = list(range(24))
-        if env.solar_w_m2 and max(env.solar_w_m2) > 100.0:
-            env.solar_w_m2 = [v * 1.0 for v in env.solar_w_m2]
+        locations = result.get("locations") or []
+        if not locations:
+            return env
+        params = locations[0].get("parameters") or {}
+        series_map = {
+            "wet_bulb_c": params.get("wet_bulb_temperature_celsius"),
+            "apparent_c": params.get("apparent_temperature_celsius"),
+            "humidity_pct": params.get("relative_humidity_percent"),
+            "heat_index_c": params.get("heat_index_celsius"),
+            "co2_ppm": params.get("co2_ppm"),
+        }
+        for field, values in series_map.items():
+            if values:
+                setattr(env, field, [float(v) for v in values if v is not None])
+        n = len(env.apparent_c) or 24
+        env.hours = list(range(n))
+        ghi = _num((locations[0].get("solar_irradiance") or {}).get("clear_sky") or {}, "ghi")
+        if ghi and ghi > 0.0:
+            env.solar_w_m2 = [
+                round(max(0.0, ghi * math.sin(math.pi * (h - 6) / 12.0)), 1)
+                if 6 <= h <= 18 else 0.0
+                for h in range(n)
+            ]
+        if not env.wet_bulb_c and env.apparent_c:
+            env.wet_bulb_c = [a - 6.0 for a in env.apparent_c]
         return env
 
     def get_district_snapshot(
