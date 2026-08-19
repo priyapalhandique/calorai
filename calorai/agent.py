@@ -292,6 +292,33 @@ class AuditAgent:
             ),
             1,
         )
+        # Theory-vs-data verdict: the physics predicts a *skin*
+        # temperature; the API layer may read as canopy/comfort
+        # temperature instead. A tile at/below air temperature cannot
+        # be sunlit skin — the residual is the layer-semantics offset.
+        tile_excess = surface_c - air_c
+        skin_excess = equilibrium_c - air_c
+        if tile_excess <= 1.0:
+            layer_verdict = (
+                "API tile reads at or below air temperature — this layer "
+                "behaves like canopy/comfort temperature, not sunlit skin; "
+                "the physics predicts the skin temperature separately "
+                f"({equilibrium_c:.0f} C, +{skin_excess:.1f} K above air). "
+                "Skin temperature drives touch/WBGT impacts; the tile layer "
+                "drives comfort impacts."
+            )
+        elif tile_excess >= 5.0:
+            layer_verdict = (
+                "API tile reads >5 K above air — behaves like a skin/"
+                "surface layer; the equilibrium prediction and the tile "
+                "should converge as inputs harden."
+            )
+        else:
+            layer_verdict = (
+                "API tile reads mildly above air — mixed canopy/surface "
+                "layer; treat the equilibrium skin prediction as the "
+                "upper physical bound."
+            )
 
         interventions = self._prescribe(
             irradiance=irradiance,
@@ -367,6 +394,14 @@ class AuditAgent:
                 "convective_coefficient": round(h_c, 1),
             },
             "closure": closure,
+            "theory_vs_data": {
+                "measured_tile_c": round(surface_c, 2),
+                "predicted_skin_c": equilibrium_c,
+                "air_temperature_c": round(air_c, 2),
+                "tile_excess_above_air_c": round(tile_excess, 1),
+                "skin_excess_above_air_c": round(skin_excess, 1),
+                "verdict": layer_verdict,
+            },
             "exposure": {
                 **exposure,
                 "wbgt_c": round(exposure["wbgt_c"], 2),

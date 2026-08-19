@@ -75,6 +75,14 @@ maps onto it. The four source texts live locally in `Resources/`
 - **NOAA 65112** (Clark, Konrad & Grundstein 2024): WBGT forecast
   accuracy ±0.6 °C, wind sheltering as dominant error → motivates our
   canyon wind treatment (B1) and h_c sensitivity (B4).
+- Garg, Bansal & Ghosh, *Thermal Physics*, Tata McGraw-Hill — Ch. 11:
+  Stefan's law E = σT⁴ (Eq. 11.8, σ = 5.672×10⁻⁸ W·m⁻²·K⁻⁴) and the
+  exact linearization of the fourth-power exchange to Newton's law of
+  cooling, E = 4σA·T̄³·ΔT (Eq. 11.10) — the derivation-grade basis of
+  our `linearized_conductance`/`radiative_conductance` and every
+  ΔT = ΔQ/H mitigation lever; Appendix IV (conduction) grounds the
+  damping-depth/storage terms. Chapters 1–10, 12–15 (kinetic theory,
+  statistics) are not used.
 - Oke, Mills, Christen & Voogt 2017, *Urban Climates*, Cambridge Univ.
   Press — canyon geometry (§5.2), urban energy balance (§5.4), LCZ
   fabric properties (Table 2.2).
