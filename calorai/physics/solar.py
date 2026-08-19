@@ -64,6 +64,53 @@ def solar_elevation_degrees(
     return math.degrees(math.asin(max(-1.0, min(1.0, sin_elev))))
 
 
+def solar_azimuth_degrees(
+    latitude_deg: float,
+    declination_deg: float,
+    hour_angle_deg: float,
+    elevation_deg: float | None = None,
+) -> float:
+    """Solar azimuth (° from North, clockwise: 0=N, 90=E, 180=S, 270=W).
+
+    A = acos((sin δ − sin φ sin el) / (cos φ cos el)); morning hours
+    (H < 0, sun in the east) map below 180°, afternoon above.
+    """
+    if elevation_deg is None:
+        elevation_deg = solar_elevation_degrees(
+            latitude_deg, declination_deg, hour_angle_deg
+        )
+    if elevation_deg <= 0.0:
+        return 180.0  # below horizon: undefined; point South
+    cos_phi = math.cos(latitude_deg * DEG)
+    if cos_phi <= 1e-9:
+        return 180.0
+    ratio = (
+        math.sin(declination_deg * DEG)
+        - math.sin(latitude_deg * DEG) * math.sin(elevation_deg * DEG)
+    ) / (cos_phi * math.cos(elevation_deg * DEG))
+    azimuth = math.degrees(math.acos(max(-1.0, min(1.0, ratio))))
+    if hour_angle_deg > 0.0:
+        return 360.0 - azimuth
+    return azimuth
+
+
+def clear_sky_ghi_w_m2(
+    elevation_deg: float,
+    transmittance: float = 0.75,
+) -> float:
+    """Clear-sky horizontal irradiance GHI ≈ S₀·sin(el)·τ (W/m²).
+
+    τ ≈ 0.75 is a typical clear-day atmospheric transmittance (noon
+    clear skies read ~900-1000 W/m²). Used for orientation *ranking*
+    when only a daily scalar is available.
+    """
+    if elevation_deg <= 0.0:
+        return 0.0
+    if not 0.0 < transmittance <= 1.0:
+        raise ValueError("transmittance must be in (0, 1]")
+    return max(0.0, SOLAR_CONSTANT * math.sin(elevation_deg * DEG) * transmittance)
+
+
 def _diffuse_fraction(ghi_w_m2: float, elevation_deg: float) -> float:
     """Diffuse share of horizontal GHI from the clearness index.
 

@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     audit.add_argument("--json", action="store_true", help="emit structured report, no narration")
     audit.add_argument("--mock", action="store_true", help="force offline mock data")
     audit.add_argument("--narrator", default="auto", choices=("auto", "template", "github-models"))
+    audit.add_argument("--pdf", action="store_true", help="also render a PDF report to outputs/")
 
     sub.add_parser("serve", help="run the FastAPI web app on :8000")
 
@@ -57,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, default=str))
     else:
         print(report["narrative"])
+    if args.pdf:
+        from .report import build_pdf_report
+
+        path = build_pdf_report(report)
+        print(f"PDF report written to {path}")
     return 0
 
 

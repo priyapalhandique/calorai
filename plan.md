@@ -24,7 +24,7 @@ Submission checklist (all required):
    - Team name (own name or project name) → `calorai`
    - Member names/emails → Priyapal Handique (solo)
    - Project title + pitch
-   - Primary track **Track 6 — Agentic** + up to 2 optional secondary tags (e.g. Resilient Cities, Government & Environment)
+   - Primary track **Track 6 — Agentic** + up to 2 optional secondary tags: **Track 2 — Future Buildings & Energy** (retrofit ROI, facade-orientation advisor) and **Track 5 — Model Designing** (packaged vulnerability / safety / microclimate models)
    - Who it's for, where & when (city/area + time period)
    - How the Temperature API was used
    - **FortyGuard API key ID** (to confirm real API use — pull from Dashboard Profile)
@@ -51,8 +51,7 @@ Prizes: top-3 teams each win an Nvidia GPU; plus incubation, internships, API di
 - [x] **Live verified end-to-end** (Phoenix, 2024-07-15 14:00): 2,891 cells, 39.57–39.76 °C,
       solar absorption 96% of heat load, WBGT 28.5 °C "high", top mitigation cool roofs **−13.0 °C**,
       full narrative via API, source=live
-- [x] Credits: **38.5k / 2,000,000 used (1.9%)** — activity breakdown 5 heatmaps (21.1k) + 6 env
-      analyses (17.4k); 1,961,500 remaining; expiry Sep 22. Usage monitoring verified programmatically:
+- [x] Credits: **78.5k / 2,000,000 used (3.9%)** — activity breakdown 9 heatmaps (38.0k) + 11 env analyses (31.9k) + 1 heat-intelligence probe (8.6k); 1,921,520 remaining; expiry Sep 22. Usage monitoring verified programmatically:
       `POST /v1/system/fetch-api-key-usage` (plan, key status, credit_summary, activity_breakdown) +
       `POST /v1/system/fetch-api-key-custom-usage` (per date-range breakdown) — both match the
       docs page tracker at https://docs-api.fortyguard.com/docs/credits-usage (login with API key;
@@ -124,14 +123,21 @@ Core demo stays the city audit; these three ship as the showcase set (all Basic-
 **Narrative glue (per Q&A "focused beats broad"): one district, one heat problem, three interventions —
 each act closes on a headline impact number.**
 - [ ] **Bus-stop shade prioritization (city planner)** — agent ingests stops CSV → env_params per stop (point-based, cheap) → WBGT + absorbed-flux ranking → per-stop shade memo ("these 12 stops breach WBGT 30 °C, shade first, −ΔT each"). Handbook Track 1 starting point, upgraded with physics
-- [ ] **Retrofit ROI in dollars (building/utility owners)** — smallest lift, largest judging upside: add degree-hours × envelope area × cooling-efficiency model to existing ΔT outputs → annual $ saved + payback years ("−13 °C peak, ~$41k/yr cooling avoided, ~6 yr payback")
-- [ ] **Worker heat-safety sweep + memo (construction/logistics)** — monitoring agent sweeps site portfolio on current-day conditions (env_params), WBGT vs OSHA-style thresholds, auto alert + compliance memo; = handbook's Track 6 monitoring idea made concrete
+- [x] **Retrofit ROI in dollars (building/utility owners)** — smallest lift, largest judging upside: add degree-hours × envelope area × cooling-efficiency model to existing ΔT outputs → annual $ saved + payback years ("−13 °C peak, ~$41k/yr cooling avoided, ~6 yr payback"). **Shipped Aug 19**: `calorai/physics/economics.py` — Phoenix live: 20,378 kWh/yr, $3,057/yr, 3.3-yr payback (400 m² tile, assumptions in output). Track 2 secondary tag
+- [x] **Worker heat-safety sweep + memo (construction/logistics)** — monitoring agent sweeps site portfolio on current-day conditions (env_params), WBGT vs OSHA-style thresholds, auto alert + compliance memo; = handbook's Track 6 monitoring idea made concrete. **Shipped Aug 19**: `calorai/physics/vulnerability.py` — score 0-100 + intensity-adjusted WBGT alert; Phoenix: 84/100 critical. Track 5 secondary tag
 - [ ] Stretch (only if credits/time allow): cool-route exposure path using hourly tcm layers
 - [ ] Add 2nd/3rd live districts (e.g. miami, las vegas) with one heatmap+env each (≈9k credits, cached after)
 - [ ] Cross-city comparison feature (rank cities by WBGT / absorbed flux / mitigation lift)
 - [ ] UI polish → **tabbed one-district story** (Act 1 retrofit ROI → Act 2 shade ranking → Act 3
       safety sweep); every act ends with a headline number (Impact 40% front and center);
       CDN-hosted frontend deps only (incognito/no-install safe), no localStorage dependencies
+- [x] **PDF report deliverable** (shipped Aug 19): `calorai/report.py` — reportlab PDF with TOC +
+      6 charts (energy balance, attribution donut, diurnal curve, facade loads, intervention ΔT,
+      vulnerability donut); wired as `GET /api/report` + CLI `--pdf` + UI "Download PDF" button
+- [x] **Webinar-style demo notebook** (shipped Aug 19): `notebooks/calorai_demo.ipynb` — auth +
+      credit check → AuditAgent pipeline → sections → PDF; verified executing end-to-end (mock)
+- [x] **Premium probe** (shipped Aug 19): `/v1/heat_intelligence` succeeded — 27-page PDF at
+      Phoenix (~8.6k credits); Hackathon plan has premium; PDF saved to `outputs/`
 
 ### D6 (Aug 24) — Deploy → live demo link
 - [ ] **Render free web service + keep-alive** (decision Aug 19; free tier sleeps after inactivity):
@@ -193,7 +199,7 @@ failed tasks are free — retry liberally at zero cost; verify coverage (US-only
 | Risk | Mitigation |
 |---|---|
 | Today's date returns zero cells (catalog lag) | All demos pinned to catalog-proven dates (2024-07-15); UI warns on non-covered dates |
-| Premium endpoints (heat_intelligence PDF, satellite, street view) unavailable on Basic plan | Agentic story leans on heatmap + env_params (both Basic); no dependency on premium |
+| Premium endpoints (heat_intelligence PDF, satellite, street view) — **RESOLVED 2026-08-19** | Probe succeeded: `/v1/heat_intelligence` (geographic+environmental+urban) returned a 27-page PDF at Phoenix (~8.6k credits). Hackathon plan includes premium. Satellite/street-view not yet exercised — keep low priority |
 | LLM narrator needs API key we don't have | Cascade: auto → GitHub Models → template narrator; fully deterministic without LLM |
 | Team unresponsive → effectively solo | Solo entries welcome (§3); keep scope shippable alone |
 | API access ends when hackathon ends | Ship demo + video + summary before Sep 1; mock mode keeps repo runnable forever |

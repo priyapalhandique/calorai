@@ -14,8 +14,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from .agent import AuditAgent, AuditError, AuditRequest
@@ -97,6 +97,39 @@ def audit(body: AuditBody) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     report = agent.run(narrate=body.narration != "none")
     return report
+
+
+@app.get("/api/report")
+def report_pdf(
+    district: str = Query("phoenix", description="district key from /api/districts"),
+    date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
+    hour: int = Query(14, ge=0, le=23),
+    threshold_c: float = Query(30.0),
+    source: str | None = Query(None, description="auto | mock | live"),
+) -> Response:
+    """Render the audit as a PDF report (table of contents + charts)."""
+    from .report import build_pdf_report
+
+    try:
+        request = AuditRequest(
+            district=district,
+            date=date,
+            hour=hour,
+            threshold_c=threshold_c,
+            data_source=source,
+            narrator_kind=None,
+        )
+        agent = AuditAgent(request)
+    except (AuditError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    report = agent.run(narrate=False)
+    path = build_pdf_report(report)
+    filename = path.name
+    return Response(
+        content=path.read_bytes(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 if __name__ == "__main__":

@@ -82,6 +82,43 @@ maps onto it. The four source texts live locally in `Resources/`
   Phoenix live: irradiance dominates (±2.2 K), wind (±1.4 K), albedo
   (±0.5 K) — the honest uncertainty envelope for every headline number.
 
+## Track 2 / Track 5 (shipped 2026-08-19, 108 tests total)
+
+### T2a — Facade-orientation advisor (`calorai/physics/facade.py`)
+- Wall flux via the tilted-plane beam projection at tilt = 90°:
+  G_wall = (1−k_d)·GHI·max(cos el·cos(az−ψ), 0)/sin el + k_d·GHI/2 +
+  ρ_g·GHI/2 — Campbell & Norman Ch. 11 (radiation geometry on tilted
+  planes); Oke 1987 §2.4.
+- `solar_azimuth_degrees` added to `solar.py` (NOAA cosine formula);
+  `clear_sky_ghi_w_m2` = S₀·sin(el)·τ, τ = 0.75, used for orientation
+  *ranking* when only a daily scalar exists (documented caveat).
+- Seasonality is the point: at the equinox the south facade is hottest
+  (Phoenix: 4.84 kWh/m²/day vs north 1.22); in deep summer the sun is
+  nearly overhead and the south wall is *coldest* (2.27 vs north 2.69,
+  which catches ENE morning beam) — glazing advice must be seasonal.
+
+### T2b — Retrofit economics (`calorai/physics/economics.py`)
+- E_avoided = U·A·DH·ΔT / (1000·COP) — transmission-physics reduction
+  of the cooling load, ΔT being the physics engine's intervention
+  number (°C). COP = 3.5, U = 0.5 W/m²·K defaults; assumptions are
+  returned with the numbers.
+- Cooling-season degree-hours proxy DH = hot_days·h_day·max(0, T̄ −
+  18.3 °C balance) with a hot-days scaling 100 + 12·(T̄ − 26), capped
+  at 200 days — documented proxy, not a load model.
+- Live Phoenix audit: cool-roof ΔT 16.8 °C over 21 240 °C·h → 20 378
+  kWh/yr avoided, $3 057/yr, 3.3-yr simple payback on one 400 m² tile
+  at $25/m².
+
+### T5 — Packaged vulnerability & safety models (`calorai/physics/vulnerability.py`)
+- Vulnerability score (0–100) = WBGT intensity (40) + exceedance
+  duration (20) + population sensitivity (20) + dose past the
+  very-high band (20); bands low/medium/high/critical. Transparent
+  weights so a heat officer can see *why* a score is high.
+- Worker-safety alert: effective WBGT = measured + work-intensity
+  offset (light −0.5, heavy +1.0 °C), band guidance from the OSHA-style
+  ladder in `stress.py`. Phoenix audit hour: WBGT 42.8 °C → 84/100
+  critical, "Stop heavy outdoor work".
+
 ## Ground-truth validation sources
 - **NOAA 65112** (Clark, Konrad & Grundstein 2024): WBGT forecast
   accuracy ±0.6 °C, wind sheltering as dominant error → motivates our

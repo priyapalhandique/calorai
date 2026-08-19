@@ -22,6 +22,9 @@
            background:linear-gradient(90deg,#ff8c42,#ffb454); color:#14100a; font-weight:700;
            font-size:14px; cursor:pointer; }
   button:disabled { opacity:.5; cursor:wait; }
+  #pdf { background:transparent; border:1px solid var(--accent); color:var(--accent); margin-top:8px; }
+  #pdf:not(:disabled) { cursor:pointer; }
+  #pdf:not(:disabled):hover { background:rgba(255,180,84,.12); }
   #status { font-size:12px; color:var(--muted); margin-top:10px; min-height:16px; }
   #report { white-space:normal; line-height:1.55; font-size:14.5px; }
   #report h1,#report h2,#report h3 { color:var(--accent); margin:1.2em 0 .4em; }
@@ -64,6 +67,7 @@
       <option value="none">none (raw JSON)</option>
     </select>
     <button id="run">Run audit</button>
+    <button id="pdf" disabled>Download PDF report</button>
     <div id="status"></div>
   </aside>
   <main class="panel"><div id="report">Pick a district and run an audit — every °C comes
@@ -109,9 +113,18 @@ $("run").onclick = async () => {
     const narrative = data.narrative || ("<pre>" + md(JSON.stringify(data,null,2)) + "</pre>");
     $("report").innerHTML = md(narrative);
     $("status").textContent = `source: ${data.source} · ${data.pipeline}`;
+    $("pdf").disabled = false;
   } catch (e) {
     $("report").innerHTML = `<h2>Network error</h2><p>${md(String(e))}</p>`;
   } finally { btn.disabled = false; }
+};
+$("pdf").onclick = () => {
+  const params = new URLSearchParams({
+    district: $("district").value, date: $("date").value,
+    hour: $("hour").value, threshold_c: $("threshold").value,
+    source: $("source").value,
+  });
+  window.location.href = "/api/report?" + params.toString();
 };
 loadDistricts();
 </script>

@@ -24,6 +24,7 @@ Workflow (all deterministic):
 
 from __future__ import annotations
 
+import datetime as _dt
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -56,6 +57,12 @@ from .physics import (
     temperature_drop_from_flux_removal,
     thermal_admittance,
 )
+from .physics.economics import (
+    cooling_degree_hours,
+    retrofit_roi,
+)
+from .physics.facade import facade_heat_load_ranking
+from .physics.vulnerability import heat_vulnerability_score, worker_safety_alert
 
 #: Default envelope assumptions for the audit hour (physics constants).
 EMISSIVITY_DEFAULT = 0.93
@@ -423,6 +430,7 @@ class AuditAgent:
                 "convective_coefficient": round(h_c, 1),
                 "street_level_convective_coefficient": round(h_c_street, 1),
             },
+            "diurnal": self._diurnal_block(snapshot),
             "closure": closure,
             "theory_vs_data": {
                 "measured_tile_c": round(surface_c, 2),
@@ -437,6 +445,24 @@ class AuditAgent:
                 "wbgt_c": round(exposure["wbgt_c"], 2),
             },
             "interventions": interventions,
+            # Track 2 — retrofit economics: the top intervention's ΔT
+            # converted into annual savings and payback (transmission
+            # physics: U·A·DH·ΔT / COP). Assumptions are returned with
+            # the numbers, not hidden.
+            "retrofit_roi": self._retrofit_roi(interventions[0]),
+            # Track 5 — packaged vulnerability model: composite score
+            # (intensity + duration + sensitivity + dose) and the
+            # WBGT worker-safety alert at the audit hour.
+            "vulnerability": self._vulnerability_block(
+                exposure, exceedance_hrs, hour_env, air_c, irradiance, wind
+            ),
+            "facade": facade_heat_load_ranking(
+                self.district.lat,
+                self.district.lon,
+                _dt.date.fromisoformat(req.date).timetuple().tm_yday,
+                self.district.utc_offset_hours,
+                ground_albedo=eff_albedo,
+            ),
             "provenance": (
                 f"temperature layer: {snapshot.source}; "
                 f"env series: {snapshot.env.source if snapshot.env else 'n/a'}; "
@@ -547,6 +573,74 @@ class AuditAgent:
         return [
             {**iv, "delta_t_c": round(iv["delta_t_c"], 2)} for iv in interventions
         ]
+
+    # ---------------------------------------------------------- track 2 / 5
+
+    def _diurnal_block(self, snapshot: Any) -> dict[str, Any]:
+        """24 h apparent-temperature + solar series for the PDF chart.
+
+        Kept out of the audit math (aggregates only); present for
+        visualization. None values (missing live hours) stay None.
+        """
+        block: dict[str, Any] = {"hours": list(range(24))}
+        if snapshot.env is not None:
+            if getattr(snapshot.env, "apparent_c", None):
+                block["apparent_c"] = [
+                    round(v, 2) if v is not None else None
+                    for v in snapshot.env.apparent_c
+                ]
+            if getattr(snapshot.env, "solar_w_m2", None):
+                block["solar_w_m2"] = [
+                    round(v, 1) if v is not None else None
+                    for v in snapshot.env.solar_w_m2
+                ]
+        return block
+
+    def _retrofit_roi(self, top_intervention: dict[str, Any]) -> dict[str, Any]:
+        """Annual savings / payback for the top intervention.
+
+        One 20×20 m tile (400 m²) of cool-roof coating at ~$25/m², with
+        the district's cooling-season degree-hours from its hot-season
+        mean (proxy, documented). The ΔT is the intervention's peak
+        reduction applied across the sunlit cooling hours embedded in
+        the degree-hour estimate.
+        """
+        degree_hours = cooling_degree_hours(self.district.base_mean_c)
+        roi = retrofit_roi(
+            degree_hours_c=degree_hours,
+            delta_t_c=top_intervention["delta_t_c"],
+            envelope_area_m2=400.0,
+            retrofit_cost_usd=400.0 * 25.0,
+        )
+        roi["intervention"] = top_intervention["name"]
+        roi["cooling_season_degree_hours_c"] = round(degree_hours, 0)
+        return roi
+
+    def _vulnerability_block(
+        self,
+        exposure: dict[str, Any],
+        exceedance_hrs: float,
+        hour_env: dict[str, Any],
+        air_c: float,
+        irradiance: float,
+        wind: float,
+    ) -> dict[str, Any]:
+        """Composite vulnerability score + worker-safety alert."""
+        dose = exposure.get("dose", {}) or {}
+        above = dose.get("above_threshold_c_hours") or 0.0
+        score = heat_vulnerability_score(
+            wbgt_c=exposure["wbgt_c"],
+            exceedance_hours=exceedance_hrs,
+            above_threshold_c_hours=above,
+        )
+        alert = worker_safety_alert(
+            wet_bulb_c=hour_env["wet_bulb_c"],
+            dry_bulb_c=air_c,
+            irradiance_w_m2=irradiance,
+            wind_speed_m_s=wind,
+            work_intensity="moderate",
+        )
+        return {"score": score, "safety_alert": alert}
 
 
 def _effusivity_for(albedo: float) -> float:
