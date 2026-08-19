@@ -30,6 +30,12 @@ maps onto it. The four source texts live locally in `Resources/`
   sees warm walls through (1−ψ) instead of the cool sky (their §5.2.3);
   implemented as an effective radiative-environment temperature fed
   into the existing `net_longwave_flux`.
+- **Wind sheltering** f(H/W) — Oke et al. Ch. 4 flow regimes: isolated
+  roughness (< 0.35) keeps ~100% of the above-roof wind, wake
+  interference (0.35–0.65) ~75%, skimming flow (> 0.65) ~55% at street
+  level; the street-level h_c is scaled accordingly (Clark, Konrad &
+  Grundstein 2024 identify wind sheltering as the dominant WBGT
+  forecast error). Phoenix live: 12.0 → 9.3 W/m²·K; Manhattan: 6.6.
 - Live check (Phoenix, 2024-07-15 14:00): H/W = 0.5 → ψ_sky = 0.618
   (exact book value √1.25 − 0.5), canyon environment 28.9 °C vs open
   sky 25.6 °C (+3.3 K of wall shielding).
@@ -43,7 +49,12 @@ maps onto it. The four source texts live locally in `Resources/`
 - **Diurnal phase lag** P/8 = 3 h for the homogeneous semi-infinite
   ideal (Campbell & Norman Ch. 8); Oke et al. 2017 §5 reports 2–5 h
   for real urban fabric — the auditor's peak-lag fingerprint for how
-  much a district stores heat.
+  much a district stores heat. The report now compares the *measured*
+  peak lag (env-series peak hour vs local solar noon; solar noon from
+  the district's longitude + UTC offset) against the ideal: Phoenix
+  live 2.5 h vs 3.0 h ideal; Manhattan's layer peaks essentially at
+  solar noon (0.1 h) — a live-data finding that this layer tracks the
+  sun directly.
 - **Force-restore storage** Q_G = μ·√(ω/2)·(T_s − T̄) + (μ/√(2ω))·dT_s/dt
   (Blackadar 1976 form, as used in Oke et al. §5.4). Independent of
   slab-thickness assumptions. Cross-check (Phoenix): 119.4 W/m² vs

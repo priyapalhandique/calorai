@@ -36,6 +36,7 @@ from .physics import (
     albedo_delta_temperature,
     canyon_albedo,
     canyon_longwave_environment_c,
+    canyon_wind_shelter_factor,
     closure_analysis,
     convective_coefficient_from_wind,
     damping_depth_m,
@@ -130,6 +131,11 @@ class AuditAgent:
             if wind > 0.0
             else CONVECTIVE_COEFFICIENT
         )
+        # Canyon wind sheltering (Oke Ch. 4): the street-level flow that
+        # actually cools the surface is a fraction of the free-stream
+        # wind — skimming flow in dense canyons keeps only ~55%.
+        wind_shelter = canyon_wind_shelter_factor(self.district.h_over_w)
+        h_c_street = h_c * wind_shelter
         # Street canyon geometry (Oke et al. 2017): darker walls lower the
         # effective albedo (trapping, Eq. 5.18) and walls block the cool
         # sky, so the floor's radiative environment is warmer than open
@@ -169,7 +175,7 @@ class AuditAgent:
             irradiance_w_m2=irradiance,
             albedo=eff_albedo,
             emissivity=EMISSIVITY_DEFAULT,
-            convective_coefficient=h_c,
+            convective_coefficient=h_c_street,
             storage_capacity_j_m2_k=slab_capacity,
             temperature_change_c=self.district.base_amplitude_c,
             time_span_hours=6.0,
@@ -192,7 +198,7 @@ class AuditAgent:
             irradiance_w_m2=irradiance,
             albedo=eff_albedo,
             emissivity=EMISSIVITY_DEFAULT,
-            convective_coefficient=h_c,
+            convective_coefficient=h_c_street,
             storage_capacity_j_m2_k=slab_capacity,
             temperature_change_c=self.district.base_amplitude_c,
             time_span_hours=6.0,
@@ -243,6 +249,23 @@ class AuditAgent:
             self.district.base_mean_c,
             temperature_rate_c_per_s=rate_c_s,
         )
+        # Measured peak-lag fingerprint (B2): the observed hour of the
+        # diurnal temperature maximum vs local solar noon, against the
+        # ideal semi-infinite lag of P/8 = 3 h (Campbell & Norman Ch. 8;
+        # real urban fabric 2-5 h, Oke et al. §5). Short measured lags
+        # mean the canopy responds faster than the ideal surface.
+        solar_noon_h = 12.0 + (
+            15.0 * self.district.utc_offset_hours - self.district.lon
+        ) / 15.0
+        measured_peak_lag_h: float | None = None
+        if snapshot.env is not None and getattr(snapshot.env, "apparent_c", None):
+            series = snapshot.env.apparent_c
+            if len(series) == 24 and any(v is not None for v in series):
+                peak_hour = max(
+                    range(24),
+                    key=lambda h: series[h] if series[h] is not None else -1e9,
+                )
+                measured_peak_lag_h = peak_hour - solar_noon_h
 
         closure = closure_analysis(
             surface_temperature_c=surface_c,
@@ -250,7 +273,7 @@ class AuditAgent:
             irradiance_w_m2=irradiance,
             albedo=eff_albedo,
             emissivity=EMISSIVITY_DEFAULT,
-            convective_coefficient=h_c,
+            convective_coefficient=h_c_street,
             storage_capacity_j_m2_k=slab_capacity,
             temperature_change_c=self.district.base_amplitude_c,
             time_span_hours=6.0,
@@ -263,7 +286,7 @@ class AuditAgent:
                 irradiance_w_m2=irradiance,
                 albedo=eff_albedo,
                 emissivity=EMISSIVITY_DEFAULT,
-                convective_coefficient=h_c,
+                convective_coefficient=h_c_street,
                 air_temperature_c=air_c,
                 radiative_environment_c=radiative_env_c,
                 storage_flux_w_m2=budget.storage,
@@ -283,7 +306,7 @@ class AuditAgent:
                     irradiance_w_m2=irradiance,
                     albedo=eff_albedo,
                     emissivity=EMISSIVITY_DEFAULT,
-                    convective_coefficient=h_c,
+                    convective_coefficient=h_c_street,
                     air_temperature_c=air_c,
                     radiative_environment_c=radiative_env_c,
                     storage_flux_w_m2=budget.storage,
@@ -324,7 +347,7 @@ class AuditAgent:
             irradiance=irradiance,
             surface_c=surface_c,
             exceedance_hrs=exceedance_hrs,
-            convective_coefficient=h_c,
+            convective_coefficient=h_c_street,
             net_radiation=net_radiation,
             storage_flux=budget.storage,
             air_c=air_c,
@@ -372,6 +395,8 @@ class AuditAgent:
                 "radiative_environment_c": (
                     round(radiative_env_c, 1) if radiative_env_c is not None else None
                 ),
+                "wind_shelter_factor": round(wind_shelter, 3),
+                "street_level_h_c_w_m2k": round(h_c_street, 1),
             },
             "inertia": {
                 "time_constant_hours": tau,
@@ -379,6 +404,10 @@ class AuditAgent:
                 "thermal_admittance": round(admittance, 1),
                 "damping_depth_m": round(damping, 3),
                 "ideal_peak_lag_hours": round(diurnal_phase_lag_hours(), 1),
+                "measured_peak_lag_hours": (
+                    round(measured_peak_lag_h, 1) if measured_peak_lag_h is not None else None
+                ),
+                "solar_noon_local_h": round(solar_noon_h, 2),
                 "storage_flux_force_restore_w_m2": round(storage_force_restore, 1),
                 "overnight_retention": round(retention, 3),
                 "persistence_layer_max_hours": (
@@ -392,6 +421,7 @@ class AuditAgent:
                 "relative_humidity_pct": round(humidity_pct, 1),
                 "sky_temperature_c": round(sky_c, 1) if sky_c is not None else None,
                 "convective_coefficient": round(h_c, 1),
+                "street_level_convective_coefficient": round(h_c_street, 1),
             },
             "closure": closure,
             "theory_vs_data": {
@@ -412,8 +442,9 @@ class AuditAgent:
                 f"env series: {snapshot.env.source if snapshot.env else 'n/a'}; "
                 f"equations: Stefan-Boltzmann with Brutsaert sky (humidity + cloud) "
                 f"blended for street-canyon walls (Oke et al. Eq. 5.18 + sky view "
-                f"factor), Newton's law (wind-aware h_c), force-restore storage "
-                f"(thermal admittance), Priestley-Taylor latent cooling (α=1.26), "
+                f"factor), Newton's law (wind-aware h_c, canyon-sheltered to street "
+                f"level), force-restore storage (thermal admittance), "
+                f"Priestley-Taylor latent cooling (α=1.26), "
                 f"equilibrium solve + sensitivity bands, "
                 f"WBGT = 0.7T_wb+0.2T_g+0.1T_db (globe from solar load); units: °C"
             ),

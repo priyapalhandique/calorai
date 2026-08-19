@@ -16,6 +16,7 @@ from calorai.physics import (
     EquilibriumInputs,
     canyon_albedo,
     canyon_longwave_environment_c,
+    canyon_wind_shelter_factor,
     damping_depth_m,
     diurnal_phase_lag_hours,
     energy_balance,
@@ -79,6 +80,19 @@ def test_canyon_walls_warm_the_radiative_environment():
     lw_canyon = net_longwave_flux(50.0, 30.0, sky_temperature_c=env_canyon)
     assert lw_canyon < lw_open
     assert lw_canyon >= 0.0
+
+
+def test_canyon_wind_shelter_flow_regimes():
+    # Oke Ch. 4 regimes: open/widely-spaced keeps the wind, skimming
+    # flow (H/W > 0.65) leaves ~55% at street level.
+    assert canyon_wind_shelter_factor(0.0) == pytest.approx(1.0)
+    assert canyon_wind_shelter_factor(0.2) == pytest.approx(1.0)
+    assert canyon_wind_shelter_factor(1.0) == pytest.approx(0.55)
+    assert canyon_wind_shelter_factor(2.0) == pytest.approx(0.55)
+    # Monotone non-increasing between the regimes.
+    assert canyon_wind_shelter_factor(0.5) > canyon_wind_shelter_factor(0.8)
+    with pytest.raises(ValueError):
+        canyon_wind_shelter_factor(-1.0)
 
 
 # ------------------------------------------- thermal admittance / storage (B2)

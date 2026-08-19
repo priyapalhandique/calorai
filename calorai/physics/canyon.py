@@ -112,3 +112,23 @@ def canyon_longwave_environment_c(
     )
     l_env = psi * l_sky + (1.0 - psi) * l_wall
     return (l_env / STEFAN_BOLTZMANN) ** 0.25 - 273.15
+
+
+def canyon_wind_shelter_factor(h_over_w: float) -> float:
+    """Fraction of the above-roof wind that reaches street level.
+
+    Oke et al. 2017 Ch. 4 flow regimes: isolated roughness flow
+    (H/W < 0.35) leaves the wind largely intact; wake interference
+    (0.35–0.65) cuts it to ~75%; skimming flow (H/W > 0.65) leaves
+    ~55% in the canyon. Street-level convective coefficients must be
+    scaled by this factor — wind sheltering is the dominant error
+    source in WBGT forecasts (Clark, Konrad & Grundstein 2024).
+    """
+    if h_over_w < 0.0:
+        raise ValueError("aspect ratio H/W must be >= 0")
+    if h_over_w <= 0.35:
+        return 1.0
+    if h_over_w >= 0.65:
+        return 0.55
+    ramp = (h_over_w - 0.35) / 0.30
+    return 1.0 - 0.45 * ramp

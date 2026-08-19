@@ -16,6 +16,7 @@ from .budget import (
 from .canyon import (
     canyon_albedo,
     canyon_longwave_environment_c,
+    canyon_wind_shelter_factor,
     sky_view_factor,
 )
 from .convection import convective_coefficient_from_wind
@@ -89,6 +90,7 @@ __all__ = [
     "albedo_delta_temperature",
     "canyon_albedo",
     "canyon_longwave_environment_c",
+    "canyon_wind_shelter_factor",
     "celsius_to_fahrenheit",
     "celsius_to_kelvin",
     "clear_sky_emissivity",

@@ -169,6 +169,9 @@ class District:
     # and warms the radiative environment (walls block the cool sky).
     h_over_w: float = 0.0
     wall_albedo: float = 0.25
+    # Local standard-time offset from UTC (hours) — drives the solar-noon
+    # computation for the measured peak-lag fingerprint.
+    utc_offset_hours: float = -7.0
     # Surface fabric (Campbell & Norman Ch. 8; asphalt defaults) — drives
     # thermal admittance, damping depth and force-restore storage.
     material_k_w_m_k: float = 1.4
@@ -185,33 +188,33 @@ DISTRICTS: dict[str, District] = {
         name="Phoenix, AZ", lat=33.4484, lon=-112.0740,
         base_mean_c=36.0, base_amplitude_c=8.0, heat_island_c=4.0,
         albedo=0.12, humidity_base_pct=25.0, wind_base_m_s=2.2,
-        h_over_w=0.5, wall_albedo=0.20,
+        h_over_w=0.5, wall_albedo=0.20, utc_offset_hours=-7.0,
     ),
     "san-jose": District(
         name="San Jose, CA", lat=37.3382, lon=-121.8863,
         base_mean_c=26.0, base_amplitude_c=7.0, heat_island_c=3.0,
         albedo=0.25, humidity_base_pct=45.0, wind_base_m_s=2.5,
-        h_over_w=0.4, wall_albedo=0.30,
+        h_over_w=0.4, wall_albedo=0.30, utc_offset_hours=-8.0,
     ),
     "manhattan": District(
         name="Lower Manhattan, NYC", lat=40.7110, lon=-74.0120,
         base_mean_c=28.0, base_amplitude_c=6.0, heat_island_c=5.0,
         albedo=0.20, humidity_base_pct=60.0, wind_base_m_s=4.0,
         cloud_base_pct=35.0,
-        h_over_w=1.5, wall_albedo=0.30,
+        h_over_w=1.5, wall_albedo=0.30, utc_offset_hours=-5.0,
     ),
     "chicago": District(
         name="Chicago, IL", lat=41.8781, lon=-87.6298,
         base_mean_c=24.0, base_amplitude_c=6.0, heat_island_c=3.5,
         albedo=0.25, humidity_base_pct=55.0, wind_base_m_s=5.0,
         cloud_base_pct=40.0,
-        h_over_w=0.8, wall_albedo=0.30,
+        h_over_w=0.8, wall_albedo=0.30, utc_offset_hours=-6.0,
     ),
     "austin": District(
         name="Austin, TX", lat=30.2672, lon=-97.7431,
         base_mean_c=33.0, base_amplitude_c=7.0, heat_island_c=3.0,
         albedo=0.18, humidity_base_pct=50.0, wind_base_m_s=3.0,
-        h_over_w=0.6, wall_albedo=0.25,
+        h_over_w=0.6, wall_albedo=0.25, utc_offset_hours=-6.0,
     ),
 }
 
