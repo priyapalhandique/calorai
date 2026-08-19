@@ -29,7 +29,7 @@ Submission checklist (all required):
    - How the Temperature API was used
    - **FortyGuard API key ID** (to confirm real API use — pull from Dashboard Profile)
    - AI tools disclosure (what was used and for what)
-   - Three links: live demo URL (must stay up **through judging, Sep 14**), video (YouTube or Loom, ≤ 3 min), code repo (GitHub; README with setup, "what doesn't work yet", one real API request + response; no hardcoded keys)
+   - Three links: live demo URL (must stay up **through judging, Sep 14**; **must open in a fresh/incognito window, no install**), video (YouTube or Loom, ≤ 3 min), code repo (GitHub; README with setup, "what doesn't work yet", one real API request + response; no hardcoded keys)
 2. Public/judge-accessible repo — **add `hackathon@fortyguard.com` as GitHub collaborator**
 3. Demo video **≤ 3 min** (hosted on YouTube or Loom)
 4. Written summary **≤ 500 words**, structured exactly: problem → user → FortyGuard usage → measured result
@@ -51,7 +51,12 @@ Prizes: top-3 teams each win an Nvidia GPU; plus incubation, internships, API di
 - [x] **Live verified end-to-end** (Phoenix, 2024-07-15 14:00): 2,891 cells, 39.57–39.76 °C,
       solar absorption 96% of heat load, WBGT 28.5 °C "high", top mitigation cool roofs **−13.0 °C**,
       full narrative via API, source=live
-- [x] Credits: ~26k / 2,000,000 used (~1.3%); cached repeat calls cost nothing
+- [x] Credits: **38.5k / 2,000,000 used (1.9%)** — activity breakdown 5 heatmaps (21.1k) + 6 env
+      analyses (17.4k); 1,961,500 remaining; expiry Sep 22. Usage monitoring verified programmatically:
+      `POST /v1/system/fetch-api-key-usage` (plan, key status, credit_summary, activity_breakdown) +
+      `POST /v1/system/fetch-api-key-custom-usage` (per date-range breakdown) — both match the
+      docs page tracker at https://docs-api.fortyguard.com/docs/credits-usage (login with API key;
+      schema discovered from the SPA bundle)
 - [x] Findings from our live runs: today's date returns **zero cells** (catalog lags); live env schema
       (`locations[].parameters` flat name→series dict; `solar_irradiance` = single clear-sky `ghi` scalar)
 - [x] FortyGuard product research: full product/plan inventory + **8 evidence-led improvement
@@ -66,10 +71,31 @@ Prizes: top-3 teams each win an Nvidia GPU; plus incubation, internships, API di
       globe-estimated WBGT 0.7/0.2/0.1 (live 31.8 °C "extreme" vs two-term 28.5 "high" before),
       humidex (44.9 °C live) + exposure dose, direct/diffuse solar split from real dni/dhi scalars.
       Live headline intact: cool roofs −13.0 °C, solar share 97%
-- [ ] **Physics Tier B parked** (decide D2+): B1 street-canyon view factors + albedo paradox;
-      B2 peak-lag analysis (time_of_measure layer vs solar noon → effusivity fingerprint);
-      B3 latent heat (Priestley–Taylor ET for green mitigation); B4 sensitivity bands (±ΔT from
-      h_c/albedo uncertainty). All four sketched in session notes; not implemented.
+- [x] **Physics Tier B shipped** (88 tests, commit pending): B1 street-canyon radiation
+      trapping (Oke Eq. 5.18 albedo + sky view factor ψ_sky = √(1+(H/W)²)−H/W + canyon
+      longwave environment — Phoenix live: ψ=0.618 exact, canyon env +3.3 K vs open sky);
+      B2 thermal admittance/damping depth (asphalt μ≈1683, d≈0.14 m) + force-restore
+      storage (119.4 vs 112.4 W/m² slab — within 6%); B3 Priestley-Taylor latent cooling
+      (α=1.26, M&U Eq. 13.41; green-roof intervention −7.1 °C live); B4 equilibrium
+      Newton solver + sensitivity bands (irradiance ±2.2 K dominates). Sources:
+      `docs/physics-references.md`; books in `Resources/` (gitignored, cited not
+      redistributed). Tier A headline intact: cool roofs −13.0 °C, solar share 97%
+
+### 2.1 Q&A intel (Aug 19) — mandatory web demo + judging guidance
+
+- **Web-based demo is mandatory, not optional.** Requirement: a live demo judges can open and
+  interact with — a URL that works in a **fresh/incognito window, no install**. Lightweight web
+  interface or hosted demo is enough (organizers named Streamlit, Gradio, Hugging Face Spaces).
+  → Our FastAPI + single-page UI already satisfies the shape; remaining work is hosting +
+  incognito-proofing (D6).
+- **Judging criteria re-confirmed:** Impact & Relevance **40%** • Technical Execution **35%** •
+  Innovation **15%** • Communication **10%** — impact matters most. Even identical ideas score
+  very differently on execution quality and how real the impact is.
+- **How to stand out:** pick a *specific real heat problem*, make the demo *actually work*, and
+  show *measurable impact* — a clear number or before-and-after. **Focused beats broad.**
+  → Decision: one narrative, three acts — "**one district, one heat problem, three interventions**"
+  (retrofit ROI −13 °C/$ → bus-stop shade ranking → worker safety sweep), each act closing on a
+  headline number; rest of the portfolio lives in the ≤3-min video + README.
 
 ## 3. Day-by-day plan (Aug 18 → Aug 30)
 
@@ -94,18 +120,27 @@ Prizes: top-3 teams each win an Nvidia GPU; plus incubation, internships, API di
 - [ ] Unit tests for tools + planner
 
 ### D4–D5 (Aug 22–23) — Demo portfolio: real-world applications
-Core demo stays the city audit; these three ship as the showcase set (all Basic-plan endpoints, cheap in credits):
+Core demo stays the city audit; these three ship as the showcase set (all Basic-plan endpoints, cheap in credits).
+**Narrative glue (per Q&A "focused beats broad"): one district, one heat problem, three interventions —
+each act closes on a headline impact number.**
 - [ ] **Bus-stop shade prioritization (city planner)** — agent ingests stops CSV → env_params per stop (point-based, cheap) → WBGT + absorbed-flux ranking → per-stop shade memo ("these 12 stops breach WBGT 30 °C, shade first, −ΔT each"). Handbook Track 1 starting point, upgraded with physics
 - [ ] **Retrofit ROI in dollars (building/utility owners)** — smallest lift, largest judging upside: add degree-hours × envelope area × cooling-efficiency model to existing ΔT outputs → annual $ saved + payback years ("−13 °C peak, ~$41k/yr cooling avoided, ~6 yr payback")
 - [ ] **Worker heat-safety sweep + memo (construction/logistics)** — monitoring agent sweeps site portfolio on current-day conditions (env_params), WBGT vs OSHA-style thresholds, auto alert + compliance memo; = handbook's Track 6 monitoring idea made concrete
 - [ ] Stretch (only if credits/time allow): cool-route exposure path using hourly tcm layers
 - [ ] Add 2nd/3rd live districts (e.g. miami, las vegas) with one heatmap+env each (≈9k credits, cached after)
 - [ ] Cross-city comparison feature (rank cities by WBGT / absorbed flux / mitigation lift)
-- [ ] UI polish: live report rendering, per-tile hottest-street view, warning banners for non-covered dates
+- [ ] UI polish → **tabbed one-district story** (Act 1 retrofit ROI → Act 2 shade ranking → Act 3
+      safety sweep); every act ends with a headline number (Impact 40% front and center);
+      CDN-hosted frontend deps only (incognito/no-install safe), no localStorage dependencies
 
 ### D6 (Aug 24) — Deploy → live demo link
-- [ ] Hugging Face Spaces (Streamlit/FastAPI mirror) with `.env` secret and mock fallback in demo mode
-- [ ] Pin demo AOIs/dates to catalog-proven timestamps; verify public URL + zero-credit path
+- [ ] **Render free web service + keep-alive** (decision Aug 19; free tier sleeps after inactivity):
+      add `render.yaml` + `Procfile` (`gunicorn calorai.main:app --bind 0.0.0.0:$PORT`),
+      `FORTYGUARD_API_KEY` set as a **Render env var** (never in repo), `/api/health` endpoint
+- [ ] Keep-alive: GitHub Actions cron workflow pinging `/api/health` every ~10 min (free;
+      keeps the free tier awake through the Sep 1–14 judging window)
+- [ ] Pin demo AOIs/dates to catalog-proven timestamps; verify public URL **in a fresh incognito
+      window** (no install, no login) + zero-credit-after-first-run path
 - [ ] Screenshots/gif capture for README + video
 - [ ] Note: **URL must stay up through Sep 14 (judging)** — no teardown after Aug 30
 
@@ -164,7 +199,7 @@ failed tasks are free — retry liberally at zero cost; verify coverage (US-only
 | API access ends when hackathon ends | Ship demo + video + summary before Sep 1; mock mode keeps repo runnable forever |
 | 3-min video cap / 500-word cap | Script and summary drafted at D7/D8, trimmed with time to spare |
 | GST timezone confusion on Aug 30 | Submit Aug 29, well ahead of 11:59 PM GST |
-| Live demo dies before judging ends | HF Spaces has no sleep for paid tier — else keep-alive cron; verify URL Sep 1 + Sep 8 |
+| Live demo dies before judging ends | Render free tier + GH Actions keep-alive ping (~10 min); verify URL Sep 1 + Sep 8; demo data cached so server-side cost stays ~0 |
 | Key ID missing from form | Pull from Dashboard Profile at D8; if absent, note it in "what doesn't work yet" |
 
 ---
@@ -172,9 +207,9 @@ failed tasks are free — retry liberally at zero cost; verify coverage (US-only
 ## 6. Definition of done
 
 - [ ] Repo: public, clean README (setup + "what doesn't work yet" + one real request/response) + CONCEPT.md,
-      tests green (47), collaborator added, no secrets in history
-- [ ] Live demo: public URL up through Sep 14, works on catalog-proven Phoenix + ≥2 more US cities,
-      zero-credit-after-first-run
+      tests green (88), collaborator added, no secrets in history, `docs/physics-references.md` linked
+- [ ] Live demo: public URL up through Sep 14, works in a fresh/incognito window with no install,
+      on catalog-proven Phoenix + ≥2 more US cities, zero-credit-after-first-run
 - [ ] Agentic: plain-language brief → tool-sequenced calls → ranked, source-cited action plan, auditable trace
 - [ ] Demos: bus-stop shade ranking + retrofit ROI ($ + payback) + worker-safety sweep; measured °C **and** $ outcomes
 - [ ] Form submitted: key ID, AI-tools disclosure, YouTube/Loom link ≤3 min, summary ≤500 words structured

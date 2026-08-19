@@ -24,23 +24,36 @@ Workflow (all deterministic):
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
 from .data_source import District, get_district, resolve_source
 from .narrator import make_narrator
 from .physics import (
+    EquilibriumInputs,
     MATERIALS,
     albedo_delta_temperature,
+    canyon_albedo,
+    canyon_longwave_environment_c,
     closure_analysis,
     convective_coefficient_from_wind,
+    damping_depth_m,
+    diurnal_phase_lag_hours,
     energy_balance,
+    equilibrium_surface_temperature_c,
     exposure_risk,
     humidex,
     overnight_retention_ratio,
+    priestley_taylor_latent_flux,
+    sensitivity_bands,
     shade_delta_temperature,
     sky_temperature_c,
+    sky_view_factor,
     storage_capacity,
+    storage_heat_flux_force_restore,
+    temperature_drop_from_flux_removal,
+    thermal_admittance,
 )
 
 #: Default envelope assumptions for the audit hour (physics constants).
@@ -117,27 +130,74 @@ class AuditAgent:
             if wind > 0.0
             else CONVECTIVE_COEFFICIENT
         )
+        # Street canyon geometry (Oke et al. 2017): darker walls lower the
+        # effective albedo (trapping, Eq. 5.18) and walls block the cool
+        # sky, so the floor's radiative environment is warmer than open
+        # sky — both make canyons hotter than a flat-site model admits.
+        eff_albedo = canyon_albedo(
+            self.district.albedo, self.district.wall_albedo, self.district.h_over_w
+        )
         # The longwave sink is the sky, not the air: Brutsaert clear-sky
-        # emissivity from humidity, blended with the cloud fraction.
+        # emissivity from humidity, blended with cloud, then canyon-blended
+        # with the warm walls the floor actually sees.
         sky_c = (
             sky_temperature_c(air_c, humidity_pct, cloud_pct / 100.0)
             if humidity_pct > 0.0
             else None
         )
+        radiative_env_c = (
+            canyon_longwave_environment_c(
+                air_c,
+                humidity_pct,
+                cloud_pct / 100.0,
+                wall_temperature_c=surface_c,
+                h_over_w=self.district.h_over_w,
+                wall_emissivity=EMISSIVITY_DEFAULT,
+            )
+            if sky_c is not None
+            else None
+        )
 
+        slab_capacity = storage_capacity(
+            self.district.material_density_kg_m3,
+            self.district.material_specific_heat_j_kg_k,
+            SLAB_THICKNESS_M,
+        )
         budget = energy_balance(
             surface_temperature_c=surface_c,
             air_temperature_c=air_c,
             irradiance_w_m2=irradiance,
-            albedo=self.district.albedo,
+            albedo=eff_albedo,
             emissivity=EMISSIVITY_DEFAULT,
             convective_coefficient=h_c,
-            storage_capacity_j_m2_k=storage_capacity(
-                2200.0, 920.0, SLAB_THICKNESS_M
-            ),
+            storage_capacity_j_m2_k=slab_capacity,
             temperature_change_c=self.district.base_amplitude_c,
             time_span_hours=6.0,
-            sky_temperature_c=sky_c,
+            sky_temperature_c=radiative_env_c,
+        )
+        # Evaporative cooling (Priestley-Taylor, Monteith & Unsworth
+        # Ch. 13): the available energy (absorbed solar minus net
+        # longwave, minus storage) that wet/vegetated fabric would send
+        # into latent heat instead of the air. Dry districts credit 0.
+        net_radiation = budget.absorbed_solar - budget.net_longwave
+        latent_flux = priestley_taylor_latent_flux(
+            net_radiation_w_m2=net_radiation,
+            ground_flux_w_m2=budget.storage,
+            air_temperature_c=air_c,
+            evaporative_fraction=self.district.evaporative_fraction,
+        )
+        budget = energy_balance(
+            surface_temperature_c=surface_c,
+            air_temperature_c=air_c,
+            irradiance_w_m2=irradiance,
+            albedo=eff_albedo,
+            emissivity=EMISSIVITY_DEFAULT,
+            convective_coefficient=h_c,
+            storage_capacity_j_m2_k=slab_capacity,
+            temperature_change_c=self.district.base_amplitude_c,
+            time_span_hours=6.0,
+            sky_temperature_c=radiative_env_c,
+            latent_flux_w_m2=latent_flux,
         )
         attribution = budget.attribution()
 
@@ -158,20 +218,79 @@ class AuditAgent:
         tau = self.district.night_persistence_hours
         retention = overnight_retention_ratio(tau)
         effusivity = _effusivity_for(self.district.albedo)
+        admittance = thermal_admittance(
+            self.district.material_k_w_m_k,
+            self.district.material_density_kg_m3,
+            self.district.material_specific_heat_j_kg_k,
+        )
+        damping = damping_depth_m(
+            self.district.material_k_w_m_k,
+            self.district.material_density_kg_m3,
+            self.district.material_specific_heat_j_kg_k,
+        )
+        # Diurnal slope at the audit hour (dT/dt of the district curve)
+        # for the force-restore storage term.
+        omega_day = 2.0 * math.pi / 24.0
+        rate_c_s = (
+            self.district.base_amplitude_c
+            * omega_day
+            * math.cos(omega_day * (req.hour - 14))
+            / 3600.0
+        )
+        storage_force_restore = storage_heat_flux_force_restore(
+            admittance,
+            surface_c,
+            self.district.base_mean_c,
+            temperature_rate_c_per_s=rate_c_s,
+        )
 
         closure = closure_analysis(
             surface_temperature_c=surface_c,
             air_temperature_c=air_c,
             irradiance_w_m2=irradiance,
-            albedo=self.district.albedo,
+            albedo=eff_albedo,
             emissivity=EMISSIVITY_DEFAULT,
             convective_coefficient=h_c,
-            storage_capacity_j_m2_k=storage_capacity(
-                2200.0, 920.0, SLAB_THICKNESS_M
-            ),
+            storage_capacity_j_m2_k=slab_capacity,
             temperature_change_c=self.district.base_amplitude_c,
             time_span_hours=6.0,
-            sky_temperature_c=sky_c,
+            sky_temperature_c=radiative_env_c,
+            latent_flux_w_m2=latent_flux,
+        )
+
+        sensitivity = sensitivity_bands(
+            EquilibriumInputs(
+                irradiance_w_m2=irradiance,
+                albedo=eff_albedo,
+                emissivity=EMISSIVITY_DEFAULT,
+                convective_coefficient=h_c,
+                air_temperature_c=air_c,
+                radiative_environment_c=radiative_env_c,
+                storage_flux_w_m2=budget.storage,
+                latent_flux_w_m2=budget.latent,
+            ),
+            {
+                "albedo": 0.02,
+                "emissivity": 0.02,
+                "convective_coefficient": 2.0,
+                "irradiance_w_m2": 50.0,
+                "radiative_environment_c": 2.0,
+            },
+        )
+        equilibrium_c = round(
+            equilibrium_surface_temperature_c(
+                EquilibriumInputs(
+                    irradiance_w_m2=irradiance,
+                    albedo=eff_albedo,
+                    emissivity=EMISSIVITY_DEFAULT,
+                    convective_coefficient=h_c,
+                    air_temperature_c=air_c,
+                    radiative_environment_c=radiative_env_c,
+                    storage_flux_w_m2=budget.storage,
+                    latent_flux_w_m2=budget.latent,
+                )
+            ),
+            1,
         )
 
         interventions = self._prescribe(
@@ -179,6 +298,9 @@ class AuditAgent:
             surface_c=surface_c,
             exceedance_hrs=exceedance_hrs,
             convective_coefficient=h_c,
+            net_radiation=net_radiation,
+            storage_flux=budget.storage,
+            air_c=air_c,
         )
 
         report: dict[str, Any] = {
@@ -206,14 +328,31 @@ class AuditAgent:
                 "longwave_flux": round(budget.net_longwave, 1),
                 "convection_flux": round(budget.convection, 1),
                 "storage_flux": round(budget.storage, 1),
+                "latent_flux": round(budget.latent, 1),
                 "net_flux": round(budget.net_flux, 1),
                 "solar_share": round(attribution["solar_absorption"], 1),
                 "longwave_share": round(attribution["net_longwave_retention"], 1),
                 "convection_share": round(attribution["convection_suppression"], 1),
+                "equilibrium_surface_temperature_c": equilibrium_c,
+                "sensitivity": {
+                    k: v for k, v in sensitivity.items()
+                },
+            },
+            "canyon": {
+                "aspect_ratio_h_over_w": self.district.h_over_w,
+                "sky_view_factor": round(sky_view_factor(self.district.h_over_w), 3),
+                "effective_albedo": round(eff_albedo, 3),
+                "radiative_environment_c": (
+                    round(radiative_env_c, 1) if radiative_env_c is not None else None
+                ),
             },
             "inertia": {
                 "time_constant_hours": tau,
                 "thermal_effusivity": round(effusivity, 1),
+                "thermal_admittance": round(admittance, 1),
+                "damping_depth_m": round(damping, 3),
+                "ideal_peak_lag_hours": round(diurnal_phase_lag_hours(), 1),
+                "storage_flux_force_restore_w_m2": round(storage_force_restore, 1),
                 "overnight_retention": round(retention, 3),
                 "persistence_layer_max_hours": (
                     snapshot.persistence.max if snapshot.persistence else None
@@ -236,8 +375,11 @@ class AuditAgent:
             "provenance": (
                 f"temperature layer: {snapshot.source}; "
                 f"env series: {snapshot.env.source if snapshot.env else 'n/a'}; "
-                f"equations: Stefan-Boltzmann with Brutsaert sky (humidity + cloud), "
-                f"Newton's law (wind-aware h_c), ΔT = ΔQ/H, "
+                f"equations: Stefan-Boltzmann with Brutsaert sky (humidity + cloud) "
+                f"blended for street-canyon walls (Oke et al. Eq. 5.18 + sky view "
+                f"factor), Newton's law (wind-aware h_c), force-restore storage "
+                f"(thermal admittance), Priestley-Taylor latent cooling (α=1.26), "
+                f"equilibrium solve + sensitivity bands, "
                 f"WBGT = 0.7T_wb+0.2T_g+0.1T_db (globe from solar load); units: °C"
             ),
             "warnings": snapshot.warnings,
@@ -254,6 +396,9 @@ class AuditAgent:
         surface_c: float,
         exceedance_hrs: float,
         convective_coefficient: float = CONVECTIVE_COEFFICIENT,
+        net_radiation: float = 0.0,
+        storage_flux: float = 0.0,
+        air_c: float = 30.0,
     ) -> list[dict[str, Any]]:
         """Ranked interventions with quantified °C, best first."""
         albedo_old = self.district.albedo
@@ -281,6 +426,20 @@ class AuditAgent:
             emissivity=EMISSIVITY_DEFAULT,
             convective_coefficient=convective_coefficient,
         )
+        # Evaporative green surfaces: the latent flux a 50%-wetted canopy
+        # would draw from the available energy (Priestley-Taylor).
+        green = priestley_taylor_latent_flux(
+            net_radiation_w_m2=net_radiation,
+            ground_flux_w_m2=storage_flux,
+            air_temperature_c=air_c,
+            evaporative_fraction=0.5,
+        )
+        green_drop = temperature_drop_from_flux_removal(
+            removed_flux_w_m2=green,
+            surface_temperature_c=surface_c,
+            emissivity=EMISSIVITY_DEFAULT,
+            convective_coefficient=convective_coefficient,
+        )
         interventions = [
             {
                 "name": "Cool roofs on hottest tiles (albedo 0.12→0.60)",
@@ -296,7 +455,7 @@ class AuditAgent:
                 "name": "Street-tree shade canopy (50% coverage)",
                 "delta_t_c": trees["delta_temperature_c"],
                 "removed_flux_w_m2": trees["removed_flux_w_m2"],
-                "basis": "ΔT = s·(1−α)·G/H; latent cooling not credited",
+                "basis": "ΔT = s·(1−α)·G/H; latent cooling credited separately below",
                 "scope": "high-exposure streets",
             },
             {
@@ -305,6 +464,17 @@ class AuditAgent:
                 "removed_flux_w_m2": concrete["removed_flux_w_m2"],
                 "basis": "same lever equation, smaller Δα",
                 "scope": "all district roads",
+            },
+            {
+                "name": "Green roofs on hottest tiles (50% evaporative cover)",
+                "delta_t_c": green_drop,
+                "removed_flux_w_m2": green,
+                "basis": (
+                    f"Priestley-Taylor λE = α·s/(s+γ)·(Q*−G) at "
+                    f"f_evap=0.5, Q*−G={net_radiation - storage_flux:.0f} W/m², "
+                    "α=1.26 (Monteith & Unsworth Ch. 13)"
+                ),
+                "scope": "top 20% tiles by peak temperature",
             },
         ]
         interventions.sort(key=lambda iv: iv["delta_t_c"], reverse=True)

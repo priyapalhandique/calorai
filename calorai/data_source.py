@@ -164,6 +164,19 @@ class District:
     night_persistence_hours: float = 12.0  # effective cooling time constant
     wind_base_m_s: float = 2.5  # diurnal wind-floor for mock atmospheres
     cloud_base_pct: float = 15.0  # mock sky cover, %
+    # Street-canyon geometry (Oke et al. 2017 §5.2): 0 = open site,
+    # ~1.0+ = dense downtown canyon. Raises absorbed solar (Eq. 5.18)
+    # and warms the radiative environment (walls block the cool sky).
+    h_over_w: float = 0.0
+    wall_albedo: float = 0.25
+    # Surface fabric (Campbell & Norman Ch. 8; asphalt defaults) — drives
+    # thermal admittance, damping depth and force-restore storage.
+    material_k_w_m_k: float = 1.4
+    material_density_kg_m3: float = 2200.0
+    material_specific_heat_j_kg_k: float = 920.0
+    # Fraction of the surface that evaporates (0 dry urban fabric, 1 wet
+    # vegetation/water) — scales Priestley-Taylor latent cooling.
+    evaporative_fraction: float = 0.0
 
 
 #: US districts with distinct thermal personalities — all mock-safe.
@@ -172,28 +185,33 @@ DISTRICTS: dict[str, District] = {
         name="Phoenix, AZ", lat=33.4484, lon=-112.0740,
         base_mean_c=36.0, base_amplitude_c=8.0, heat_island_c=4.0,
         albedo=0.12, humidity_base_pct=25.0, wind_base_m_s=2.2,
+        h_over_w=0.5, wall_albedo=0.20,
     ),
     "san-jose": District(
         name="San Jose, CA", lat=37.3382, lon=-121.8863,
         base_mean_c=26.0, base_amplitude_c=7.0, heat_island_c=3.0,
         albedo=0.25, humidity_base_pct=45.0, wind_base_m_s=2.5,
+        h_over_w=0.4, wall_albedo=0.30,
     ),
     "manhattan": District(
         name="Lower Manhattan, NYC", lat=40.7110, lon=-74.0120,
         base_mean_c=28.0, base_amplitude_c=6.0, heat_island_c=5.0,
         albedo=0.20, humidity_base_pct=60.0, wind_base_m_s=4.0,
         cloud_base_pct=35.0,
+        h_over_w=1.5, wall_albedo=0.30,
     ),
     "chicago": District(
         name="Chicago, IL", lat=41.8781, lon=-87.6298,
         base_mean_c=24.0, base_amplitude_c=6.0, heat_island_c=3.5,
         albedo=0.25, humidity_base_pct=55.0, wind_base_m_s=5.0,
         cloud_base_pct=40.0,
+        h_over_w=0.8, wall_albedo=0.30,
     ),
     "austin": District(
         name="Austin, TX", lat=30.2672, lon=-97.7431,
         base_mean_c=33.0, base_amplitude_c=7.0, heat_island_c=3.0,
         albedo=0.18, humidity_base_pct=50.0, wind_base_m_s=3.0,
+        h_over_w=0.6, wall_albedo=0.25,
     ),
 }
 

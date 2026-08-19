@@ -34,6 +34,7 @@ class SurfaceBudget:
     net_longwave: float     # W/m², positive = leaving the surface
     convection: float       # W/m², positive = leaving the surface
     storage: float          # W/m², positive = warming up
+    latent: float           # W/m², positive = evaporative cooling leaving
     net_flux: float         # W/m², positive = net heat INTO the surface
 
     def attribution(self) -> dict[str, float]:
@@ -57,6 +58,7 @@ class SurfaceBudget:
             "net_longwave_w_m2": self.net_longwave,
             "convection_w_m2": self.convection,
             "storage_w_m2": self.storage,
+            "latent_w_m2": self.latent,
             "net_flux_w_m2": self.net_flux,
             "attribution_percent": self.attribution(),
         }
@@ -113,6 +115,7 @@ def energy_balance(
     temperature_change_c: float = 0.0,
     time_span_hours: float = 1.0,
     sky_temperature_c: float | None = None,
+    latent_flux_w_m2: float = 0.0,
 ) -> SurfaceBudget:
     """Full street-level budget for one surface (per m²).
 
@@ -122,7 +125,10 @@ def energy_balance(
     properties, ``convective_coefficient`` an estimate for the street
     environment, and the storage terms come from the material slab.
     ``sky_temperature_c`` (optional) replaces the air temperature as the
-    longwave sink — the Brutsaert sky model from ``radiation``.
+    longwave sink — the Brutsaert sky model from ``radiation``, or the
+    canyon-blended environment from ``canyon``.
+    ``latent_flux_w_m2`` (optional, positive = leaving) is evaporative
+    cooling, e.g. from the Priestley-Taylor model in ``latent``.
     """
     q_sol = absorbed_solar_flux(irradiance_w_m2, albedo)
     q_lw = net_longwave_flux(
@@ -135,14 +141,17 @@ def energy_balance(
     q_store = storage_flux(
         storage_capacity_j_m2_k, temperature_change_c, time_span_hours
     )
+    q_lat = max(latent_flux_w_m2, 0.0)
     # Flux convention: sinks leave the surface (negative in the balance),
-    # so net flux into the surface is solar − radiation − convection − storage.
-    net = q_sol - q_lw - q_conv - q_store
+    # so net flux into the surface is solar − radiation − convection −
+    # storage − latent.
+    net = q_sol - q_lw - q_conv - q_store - q_lat
     return SurfaceBudget(
         absorbed_solar=q_sol,
         net_longwave=q_lw,
         convection=q_conv,
         storage=q_store,
+        latent=q_lat,
         net_flux=net,
     )
 
@@ -157,10 +166,11 @@ def implied_convective_coefficient(
     temperature_change_c: float = 0.0,
     time_span_hours: float = 1.0,
     sky_temperature_c: float | None = None,
+    latent_flux_w_m2: float = 0.0,
 ) -> float:
     """The h_c that closes the balance at the measured temperatures.
 
-    Rearranged Newton's law: h_c = (Q_sol − Q_lw − Q_store)/(T_s − T_air).
+    Rearranged Newton's law: h_c = (Q_sol − Q_lw − Q_store − Q_lat)/(T_s − T_air).
     If the surface reads at or below air temperature the convective
     term cannot close the balance (no driving gradient) — returns `inf`,
     which itself is a finding.
@@ -176,7 +186,7 @@ def implied_convective_coefficient(
     gradient = surface_temperature_c - air_temperature_c
     if gradient <= 0.0:
         return float("inf")
-    return (q_sol - q_lw - q_store) / gradient
+    return (q_sol - q_lw - q_store - max(latent_flux_w_m2, 0.0)) / gradient
 
 
 def closure_analysis(
@@ -190,6 +200,7 @@ def closure_analysis(
     temperature_change_c: float = 0.0,
     time_span_hours: float = 1.0,
     sky_temperature_c: float | None = None,
+    latent_flux_w_m2: float = 0.0,
 ) -> dict:
     """Does the energy balance close at the measured temperature?
 
@@ -212,6 +223,7 @@ def closure_analysis(
         temperature_change_c=temperature_change_c,
         time_span_hours=time_span_hours,
         sky_temperature_c=sky_temperature_c,
+        latent_flux_w_m2=latent_flux_w_m2,
     )
     residual = budget.net_flux
     relative = 100.0 * abs(residual) / max(abs(q_sol), 1e-9)
@@ -229,6 +241,7 @@ def closure_analysis(
                 temperature_change_c=temperature_change_c,
                 time_span_hours=time_span_hours,
                 sky_temperature_c=sky_temperature_c,
+                latent_flux_w_m2=latent_flux_w_m2,
             ),
             1,
         ),

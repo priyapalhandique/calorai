@@ -213,6 +213,10 @@ outputs/
 # Local scratch / working files (PDF cell templates, patches, dumps)
 .scratch/
 
+# Local reference books (Campbell & Norman, Monteith & Unsworth, Oke et al., NOAA)
+# NEVER commit — copyrighted material stays local; cite, don't redistribute.
+Resources/
+
 # Project data — sample CSVs, cached API responses, live captures.
 # By default nothing under data/ ships with the repo; users bring their own
 # input files and any cached responses they want to reuse.
