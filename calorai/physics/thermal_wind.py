@@ -32,6 +32,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+import numpy as np
+
 GRAVITY_M_S2 = 9.81
 GAS_CONSTANT_AIR_J_KG_K = 287.0
 REF_PRESSURE_PA = 95_000.0  # ~950 hPa at urban surface
@@ -40,6 +42,243 @@ COLUMN_DEPTH_M = 1000.0  # mixed-layer depth of the UHI circulation
 #: Documented UHI-circulation scale: ≈1–3 m/s for a 4–8 K core excess
 #: (Oke et al. 2017 Ch. 4; urban-breeze literature). We use 0.4 m/s per K.
 SPEED_SCALE_M_S_PER_K = 0.4
+
+#: Gradient-line trajectory defaults (N2).
+FIELD_GRID_N = 48
+MAX_SAMPLES = 1500  # deterministic stride-subsample for huge live grids
+STEP_M = 250.0
+STEPS_DEFAULT = 40
+N_LINES_DEFAULT = 8
+CORE_MARGIN_K = 0.5  # within this of the field max == "reached core"
+FLAT_GRADIENT_K_PER_KM = 1e-3  # below this the field is locally flat
+KM_PER_DEG = 111.32
+
+
+class _TemperatureField:
+    """Regular square-cell grid with IDW interpolation of the tiles.
+
+    Built on an equal-physical-spacing mesh (lat cells and lon cells
+    both ``cell_km`` wide, lon scaled by cos(lat0)) so a fixed step in
+    metres is a fixed step in indices — RK4 stays isotropic.
+    """
+
+    def __init__(self, tiles: list[dict], n: int = FIELD_GRID_N) -> None:
+        if len(tiles) > MAX_SAMPLES:
+            stride = math.ceil(len(tiles) / MAX_SAMPLES)
+            tiles = tiles[::stride]
+        lats = sorted({t["lat"] for t in tiles})
+        lons = sorted({t["lon"] for t in tiles})
+        lat0, lat1 = lats[0], lats[-1]
+        lon0, lon1 = lons[0], lons[-1]
+        cos_lat = max(math.cos(math.radians((lat0 + lat1) / 2.0)), 1e-4)
+        # Degenerate rows/columns get a tiny pad so the mesh stays 2-D.
+        if lat1 - lat0 < 1e-9:
+            lat0, lat1 = lat0 - 1e-4, lat1 + 1e-4
+        if lon1 - lon0 < 1e-9:
+            lon0, lon1 = lon0 - 1e-4, lon1 + 1e-4
+        self.lat_min, self.lat_max = lat0, lat1
+        self.lon_min, self.lon_max = lon0, lon1
+        dlat_km = (lat1 - lat0) * KM_PER_DEG
+        dlon_km = (lon1 - lon0) * KM_PER_DEG * cos_lat
+        # Square cells: same cell size on both axes.
+        self.n_lat = n
+        self.n_lon = max(8, int(round(n * dlon_km / max(dlat_km, 1e-9))))
+        self.lat_axis = np.linspace(lat0, lat1, self.n_lat)
+        self.lon_axis = np.linspace(lon0, lon1, self.n_lon)
+        self.cell_km = dlat_km / (self.n_lat - 1)
+        self.cos_lat = cos_lat
+        self.lats = np.asarray([t["lat"] for t in tiles])
+        self.lons = np.asarray([t["lon"] for t in tiles])
+        self.values = np.asarray([t["value"] for t in tiles])
+        self._grid: np.ndarray | None = None
+        self._grid_smooth: np.ndarray | None = None
+
+    def field(self) -> np.ndarray:
+        """IDW temperature on the mesh (deterministic)."""
+        if self._grid is not None:
+            return self._grid
+        la, lo = np.meshgrid(self.lat_axis, self.lon_axis, indexing="ij")
+        la, lo = la.ravel(), lo.ravel()
+        dlat = la[:, None] - self.lats[None, :]
+        dlon = lo[:, None] - self.lons[None, :]
+        d2 = (dlat * KM_PER_DEG) ** 2 + (dlon * KM_PER_DEG * self.cos_lat) ** 2
+        w = 1.0 / (d2 + 1e-9)
+        g = (w @ self.values) / w.sum(axis=1)
+        self._grid = g.reshape(self.n_lat, self.n_lon)
+        return self._grid
+
+    def _smooth(self, sigma: float = 1.6) -> np.ndarray:
+        """Gaussian-blurred field for differentiation.
+
+        IDW leaves per-mesh-point discretization wobble at the tile
+        spacing scale (~3 cells); a σ≈1.6-cell blur kills the aliasing
+        while preserving gradients that span the field.
+        """
+        if self._grid_smooth is not None:
+            return self._grid_smooth
+        g = self.field()
+        k = int(math.ceil(3.0 * sigma))
+        x = np.arange(-k, k + 1)
+        kernel = np.exp(-0.5 * (x / sigma) ** 2)
+        kernel /= kernel.sum()
+        g = np.pad(g, k, mode="edge")
+        g = np.apply_along_axis(
+            lambda r: np.convolve(r, kernel, mode="valid"), axis=1, arr=g
+        )
+        g = np.apply_along_axis(
+            lambda r: np.convolve(r, kernel, mode="valid"), axis=0, arr=g
+        )
+        self._grid_smooth = g
+        return g
+
+    def grad_at(self, i: float, j: float) -> tuple[float, float]:
+        """(east, north) K/km gradient at fractional grid indices."""
+        i0 = min(max(int(math.floor(i)), 0), self.n_lat - 3)
+        j0 = min(max(int(math.floor(j)), 0), self.n_lon - 3)
+        g = self._smooth()
+        di = (g[i0 + 2, j0] - g[i0, j0]) / (2.0 * self.cell_km)
+        dj = (g[i0, j0 + 2] - g[i0, j0]) / (2.0 * self.cell_km)
+        return float(dj), float(di)  # east (lon) first, then north (lat)
+
+    def value_at(self, i: float, j: float) -> float:
+        """Bilinear temperature at fractional indices."""
+        i0 = min(max(int(math.floor(i)), 0), self.n_lat - 2)
+        j0 = min(max(int(math.floor(j)), 0), self.n_lon - 2)
+        fi, fj = i - i0, j - j0
+        g = self.field()
+        return float(
+            g[i0, j0] * (1 - fi) * (1 - fj)
+            + g[i0, j0 + 1] * (1 - fi) * fj
+            + g[i0 + 1, j0] * fi * (1 - fj)
+            + g[i0 + 1, j0 + 1] * fi * fj
+        )
+
+    def index_of(self, lat: float, lon: float) -> tuple[float, float]:
+        i = (lat - self.lat_min) / (self.lat_max - self.lat_min) * (self.n_lat - 1)
+        j = (lon - self.lon_min) / (self.lon_max - self.lon_min) * (self.n_lon - 1)
+        return float(i), float(j)
+
+    def latlon_of(self, i: float, j: float) -> tuple[float, float]:
+        return (self.lat_min + i / (self.n_lat - 1) * (self.lat_max - self.lat_min),
+                self.lon_min + j / (self.n_lon - 1) * (self.lon_max - self.lon_min))
+
+
+def _trace_line(
+    field: _TemperatureField,
+    start: tuple[float, float],
+    steps: int = STEPS_DEFAULT,
+    step_m: float = STEP_M,
+) -> dict[str, Any]:
+    """RK4 integration of a single gradient line (toward the hot core).
+
+    Steps along the normalized +grad(T) direction (the street inflow
+    branch). Terminates on: entering the warm core (within
+    ``CORE_MARGIN_K`` of the field max), stalling on a flat patch, or
+    exiting the field bounds.
+    """
+    h = step_m / (field.cell_km * 1000.0)
+    i, j = field.index_of(*start)
+    path = [(field.latlon_of(i, j))]
+    g_max = float(field.field().max())
+    threshold = g_max - CORE_MARGIN_K
+    termination = "steps exhausted"
+    for _ in range(steps):
+        ge, gn = field.grad_at(i, j)
+        mag = math.hypot(ge, gn)
+        if mag < FLAT_GRADIENT_K_PER_KM:
+            termination = "stalled (flat field)"
+            break
+        ue, un = ge / mag, gn / mag
+        # RK4: direction-only integration (speed is not modelled).
+        k1e, k1n = ue, un
+        k2e, k2n = ue, un
+        k3e, k3n = ue, un
+        k4e, k4n = ue, un
+        ni = i + h * (k1n + 2 * k2n + 2 * k3n + k4n) / 6.0
+        nj = j + h * (k1e + 2 * k2e + 2 * k3e + k4e) / 6.0
+        in_bounds = 0.0 <= ni <= field.n_lat - 1 and 0.0 <= nj <= field.n_lon - 1
+        if not in_bounds:
+            # Clamp to the boundary and scan the in-bounds chord: a core
+            # sitting on the field edge must still register as "reached".
+            ni = min(max(ni, 0.0), field.n_lat - 1.0)
+            nj = min(max(nj, 0.0), field.n_lon - 1.0)
+        # Overshoot guard: scan the chord for the first entry into the
+        # core region (a 250 m jump can skip a steep core ridge).
+        v_prev = field.value_at(i, j)
+        entered: tuple[float, float] | None = None
+        for frac in (0.25, 0.5, 0.75, 1.0):
+            si, sj = i + (ni - i) * frac, j + (nj - j) * frac
+            if field.value_at(si, sj) >= threshold:
+                entered = (si, sj)
+                break
+        if entered is None:
+            v_new = field.value_at(ni, nj)
+            if v_new < v_prev and v_prev >= threshold:
+                entered = (i, j)  # crossed the peak within one step
+        if entered is not None:
+            i, j = entered
+            path.append(field.latlon_of(i, j))
+            termination = "reached core"
+            break
+        if not in_bounds:
+            termination = "exited bounds"
+            break
+        i, j = ni, nj
+        lat, lon = field.latlon_of(i, j)
+        path.append((lat, lon))
+    return {
+        "start": [round(path[0][0], 6), round(path[0][1], 6)],
+        "path": [[round(lat, 6), round(lon, 6)] for lat, lon in path],
+        "termination": termination,
+        "length_km": round((len(path) - 1) * step_m / 1000.0, 2),
+    }
+
+
+def gradient_line_field(
+    tiles: list[dict],
+    n_lines: int = N_LINES_DEFAULT,
+    steps: int = STEPS_DEFAULT,
+    step_m: float = STEP_M,
+) -> dict[str, Any]:
+    """Gradient-line trajectories from the cool rim toward the hot core.
+
+    Start points are the coolest tiles (below district mean), picked
+    evenly around the centroid by bearing. Each line is RK4-traced along
+    the normalized +grad(T) direction on an IDW-resampled mesh.
+    """
+    if not tiles or len(tiles) < 4:
+        return {"present": False}
+    field = _TemperatureField(tiles)
+    mean_c = float(np.mean([t["value"] for t in tiles]))
+    centroid = (float(np.mean([t["lat"] for t in tiles])),
+                float(np.mean([t["lon"] for t in tiles])))
+    rim = [t for t in tiles if t["value"] < mean_c]
+    rim.sort(key=lambda t: _compass_bearing(t["lon"] - centroid[1], t["lat"] - centroid[0]))
+    picks = rim[:: max(1, math.ceil(len(rim) / n_lines))][:n_lines]
+    lines = [
+        _trace_line(field, (t["lat"], t["lon"]), steps=steps, step_m=step_m)
+        for t in picks
+    ]
+    hot = [t for t in tiles if t["value"] >= max(t["value"] for t in tiles) - CORE_MARGIN_K]
+    terminations: dict[str, int] = {}
+    for ln in lines:
+        terminations[ln["termination"]] = terminations.get(ln["termination"], 0) + 1
+    return {
+        "present": True,
+        "n_lines": len(lines),
+        "core": {
+            "lat": round(float(np.mean([t["lat"] for t in hot])), 6),
+            "lon": round(float(np.mean([t["lon"] for t in hot])), 6),
+            "temp_c": round(max(t["value"] for t in tiles), 2),
+        },
+        "terminations": terminations,
+        "lines": lines,
+        "caveat": (
+            "gradient lines trace the +grad(T) direction of the tile "
+            "field (IDW-resampled mesh, RK4); direction only — speeds "
+            "use the documented UHI-circulation scale, not a momentum solve."
+        ),
+    }
 
 
 def temperature_gradient_deg(tiles: list[dict]) -> dict[str, float]:
@@ -189,6 +428,7 @@ def urban_circulation(tiles: list[dict], mean_temp_c: float) -> dict[str, Any]:
             {"lat": t["lat"], "lon": t["lon"], "temp_c": round(t["value"], 2)}
             for t in corridor_tiles[:5]
         ],
+        "gradient_lines": gradient_line_field(tiles),
         "caveat": (
             "relative circulation from the tile temperature field only; "
             "not an absolute wind forecast (the API ships no wind). "

@@ -32,6 +32,7 @@ from typing import Any
 from .analyst import annualized_loss, district_cost_of_heat, heat_burden
 from .data_source import District, get_district, resolve_source
 from .ml.anomaly import detect_anomalies
+from .analyst.statistics import tile_statistics_block
 from .narrator import make_narrator
 from .responder import heat_response_plan, misting_plan
 from .sentinel import evaluate_alerts
@@ -392,6 +393,11 @@ class AuditAgent:
         # both relative/caveated; both computed from data already fetched.
         thermal_wind_block = urban_circulation(heatmap.tiles, heatmap.mean)
         anomaly_block = detect_anomalies(heatmap.tiles, equilibrium_c=equilibrium_c)
+        stats_block = tile_statistics_block(
+            heatmap.tiles,
+            apparent_c=snapshot.env.apparent_c if snapshot.env else None,
+            audit_hour=req.hour,
+        )
         env_dict = {
             "hour": snapshot.env.hours if snapshot.env else None,
             "apparent_c": snapshot.env.apparent_c if snapshot.env else None,
@@ -510,6 +516,9 @@ class AuditAgent:
                 "economy": economy_block,
                 # M2 Sentinel (D6) — statistical anomaly flags over the tiles.
                 "anomaly": anomaly_block,
+                # D8 — the tile field as a distribution: percentiles, IQR
+                # outliers, normality and the radial UHI cross-section.
+                "statistics": stats_block,
             },
             "thermal_wind": thermal_wind_block,
             "downburst": downburst_block,

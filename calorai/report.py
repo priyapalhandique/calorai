@@ -18,7 +18,9 @@ Figures:
     B. cause-attribution donut          G. circulation vector diagram
     C. diurnal T/solar twin-axis chart  H. WBGT work-capacity curves
     D. facade daily-load bars           I. downburst depression series
-    E. intervention ΔT bars
+    E. intervention ΔT bars             J. tile distribution + normal fit
+                                        K. hourly tile-spread boxplots
+                                        L. radial UHI cross-section
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # headless: charts are rendered to PNG, never a GUI
 import matplotlib.pyplot as plt
+import numpy as np
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -48,6 +51,8 @@ from reportlab.platypus import (
     TableStyle,
     Image,
 )
+
+from .analyst.statistics import fig_histogram_normal, fig_hourly_boxplot, fig_radial_uhi
 
 NAVY = colors.HexColor("#16283f")
 ACCENT = colors.HexColor("#c2600a")
@@ -347,6 +352,40 @@ def _circulation_diagram(circ: dict[str, Any]) -> Image:
         fontsize=7,
         color="#4a7a5a",
     )
+    # gradient-line trajectories (N2): real paths traced along +grad(T)
+    gl = circ.get("gradient_lines") or {}
+    lines = gl.get("lines") or []
+    if lines:
+        pts = [p for ln in lines for p in ln["path"]]
+        lat0 = float(np.mean([p[0] for p in pts]))
+        lon0 = float(np.mean([p[1] for p in pts]))
+        dlat = max(abs(p[0] - lat0) for p in pts)
+        dlon = max(abs(p[1] - lon0) for p in pts)
+        scale = max(dlat, dlon, 1e-9)
+        for ln in lines:
+            path = ln["path"]
+            xs = [(p[1] - lon0) / scale for p in path]
+            ys = [(p[0] - lat0) / scale for p in path]
+            term = ln.get("termination", "")
+            color = "#4a7a5a" if term == "exited bounds" else (
+                "#c2600a" if term == "reached core" else "#7a8aa0"
+            )
+            ax.plot(xs, ys, color=color, lw=1.1, alpha=0.8, zorder=2)
+            ax.plot(xs[0], ys[0], "o", ms=3, color=color, zorder=2)
+            if len(xs) > 1:
+                ax.annotate(
+                    "",
+                    xy=(xs[-1], ys[-1]),
+                    xytext=(xs[-2], ys[-2]),
+                    arrowprops=dict(arrowstyle="-|>", color=color, lw=1.1, mutation_scale=7),
+                )
+        ax.annotate(
+            f"{len(lines)} gradient lines (RK4 along +grad T)\n"
+            f"core {gl.get('core', {}).get('temp_c', '')} °C",
+            (-1.45, -1.35),
+            fontsize=7,
+            color="#5a6a7a",
+        )
     ax.set_title(
         "G · Circulation the temperature field implies\n"
         f"grad {circ.get('gradient_k_per_km', 0.0)} K/km · "
@@ -851,8 +890,57 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(_downburst_chart(db))
     out.append(Spacer(1, 0.4 * cm))
 
-    # ----------------------------------------------------- 10 theory vs data
-    out.append(_p("10. Theory vs. data", st["H1"]))
+    # ------------------------------------------- 10 tile distribution & normality
+    stats = analysis.get("statistics", {}) or {}
+    if stats.get("present"):
+        s = stats.get("summary", {}) or {}
+        o = stats.get("outliers", {}) or {}
+        nm = stats.get("normality", {}) or {}
+        uhi = stats.get("radial_uhi", {}) or {}
+        out.append(Spacer(1, 0.4 * cm))
+        out.append(_p("10. Tile distribution & normality", st["H1"]))
+        out.append(
+            _kv_table(
+                [
+                    ("Tiles in field", _fmt(stats.get("n_tiles"))),
+                    ("Range (°C)", f'{s.get("min_c", "—")} … {s.get("max_c", "—")}'),
+                    ("Mean ± std (°C)", f'{s.get("mean_c", "—")} ± {s.get("std_c", "—")}'),
+                    ("Median / IQR (°C)", f'{s.get("median_c", "—")} / {s.get("iqr_c", "—")}'),
+                    (
+                        "Percentiles P05/P25/P75/P95 (°C)",
+                        f'{s.get("p05_c", "—")} / {s.get("p25_c", "—")} / '
+                        f'{s.get("p75_c", "—")} / {s.get("p95_c", "—")}',
+                    ),
+                    ("Skewness / kurtosis", f'{s.get("skewness", "—")} / {s.get("kurtosis", "—")}'),
+                    ("Tukey 1.5×IQR outliers", f'{o.get("count", "—")} ({o.get("pct", "—")}%)'),
+                    ("Normality test", f'{nm.get("test", "—")} · p = {nm.get("p_value", "—")}'),
+                    (
+                        "Radial UHI slope",
+                        f'{uhi.get("slope_c_per_km", "—")} °C/km (R² = {uhi.get("r2", "—")})',
+                    ),
+                ]
+            )
+        )
+        advisory = stats.get("advisory")
+        if advisory:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(advisory, st["Body"]))
+        nm_adv = nm.get("advisory")
+        if nm_adv:
+            out.append(_p(nm_adv, st["Small"]))
+        out.append(Spacer(1, 0.3 * cm))
+        out.append(_image_from_fig(fig_histogram_normal(stats.get("histogram", {}) or {})))
+        if stats.get("hourly_spread"):
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_image_from_fig(fig_hourly_boxplot(stats["hourly_spread"])))
+        prof = stats.get("radial_profile", {}) or {}
+        if prof.get("present"):
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_image_from_fig(fig_radial_uhi(prof)))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ----------------------------------------------------- 11 theory vs data
+    out.append(_p("11. Theory vs. data", st["H1"]))
     out.append(
         _kv_table(
             [
@@ -870,8 +958,8 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(_p(verdict, st["Body"]))
     out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------ 11 provenance & warnings
-    out.append(_p("11. Provenance & warnings", st["H1"]))
+    # ------------------------------------------------ 12 provenance & warnings
+    out.append(_p("12. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:
