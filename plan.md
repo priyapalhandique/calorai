@@ -100,7 +100,7 @@ calorai/
 | Module | Ships | Status |
 |---|---|---|
 | M1 Auditor | energy balance, attribution, canyon, inertia, facade, retrofit ROI | ✅ done |
-| M2 Sentinel | vulnerability score + worker-safety alert ✅ · **anomaly** (tile-vs-physics residual z-score + IsolationForest) ⬜ · **alerts** (threshold rules → webhook-ready payloads, escalation) ⬜ · **downburst "outflow watch"** advisory ✅ | 🟢 |
+| M2 Sentinel | vulnerability score + worker-safety alert ✅ · **anomaly** (tile-vs-physics residual z-score + IsolationForest) ✅ · **alerts** (threshold rules → webhook-ready payloads, escalation) ⬜ · **downburst "outflow watch"** advisory ✅ | 🟢 |
 | M3 Responder | **mist cooling physics** (evaporative latent extraction, 2.26 MJ/kg, nozzle eff. 0.7 → ΔT + water budget) ⬜ · **Heat Response Agent** (WBGT/forecast breach → mist schedule, water cost vs cooling, ranked actions) ⬜ · **wind-aware misting** (thermal-wind proxy: high flow = mist disperses = skip) ⬜ | 🟡 |
 | M4 Analyst | **equity** (Gini + hottest/coolest quintile ratio on tile °C; cross-district leaderboard) ✅ · **productivity** (WBGT → work-capacity loss %, Dunne 2013/Kjellstrom, cited; annualized lost h + $) ✅ · **economy** (district-scale cost of heat = cooling $ + productivity $) ✅ · **thermal-wind proxy** (hydrostatic Δp from ΔT → urban-breeze circulation direction + relative magnitude; ventilation corridors; caveated as relative, not absolute) ✅ | 🟢 |
 
@@ -222,13 +222,14 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
       productivity curves, circulation diagram, downburst risk series); interop CSV extended with
       equity/productivity/economy/thermal-wind columns
 
-### D6 (Aug 24–25) — ML layer (forecast + anomaly)
-- [ ] `ml/forecast.py` — synthetic-data generator (physics sweeps) → train HistGradientBoosting →
-      **hold-out validation vs real API 24-h series** (MAE/RMSE vs physics-only baseline, honest table
-      in docs) → artifact `data/models/forecast_v1.joblib` + `python -m calorai train-forecast`
-- [ ] `ml/anomaly.py` — physics-residual z-score + IsolationForest on tile features; flagged tiles with
+### D6 (Aug 24–25) — ML layer (forecast + anomaly) ✅ shipped 2026-08-20 (offline half)
+- [x] `ml/forecast.py` — synthetic-data generator (physics sweeps) → train HistGradientBoosting →
+      hold-out validation vs physics (MAE 0.75 °C / R² 0.9966 at 100k rows) →
+      artifact `data/models/forecast_v1.joblib` (committed) + `python -m calorai train-forecast`;
+      `validate_vs_real()` implemented, real-series run deferred post-deploy (docs/ml-validation.md)
+- [x] `ml/anomaly.py` — physics-residual z-score + IsolationForest on tile features; flagged tiles with
       explanation; feeds U8 + report block
-- [ ] `requirements.txt` += `scikit-learn`, `joblib`; tests (~+8); docs section
+- [x] `requirements.txt` += `scikit-learn`, `joblib`; tests (+7, 147 total); docs section (docs/ml-validation.md)
 
 ### D7 (Aug 26–27) — NL agent loop + Heat Response Agent (Track 6 heart)
 - [ ] `tools.py` registry (uniform schema) with all 10 tools incl. `respond_mist`, `export`, `usage`

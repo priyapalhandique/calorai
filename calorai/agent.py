@@ -31,6 +31,7 @@ from typing import Any
 
 from .analyst import annualized_loss, district_cost_of_heat, heat_burden
 from .data_source import District, get_district, resolve_source
+from .ml.anomaly import detect_anomalies
 from .narrator import make_narrator
 from .physics import (
     EquilibriumInputs,
@@ -387,6 +388,7 @@ class AuditAgent:
         # downburst wet-bulb-depression diagnostic (Caracena 1990) —
         # both relative/caveated; both computed from data already fetched.
         thermal_wind_block = urban_circulation(heatmap.tiles, heatmap.mean)
+        anomaly_block = detect_anomalies(heatmap.tiles, equilibrium_c=equilibrium_c)
         env_dict = {
             "hour": snapshot.env.hours if snapshot.env else None,
             "apparent_c": snapshot.env.apparent_c if snapshot.env else None,
@@ -503,6 +505,8 @@ class AuditAgent:
                 "equity": equity_block,
                 "productivity": productivity_block,
                 "economy": economy_block,
+                # M2 Sentinel (D6) — statistical anomaly flags over the tiles.
+                "anomaly": anomaly_block,
             },
             "thermal_wind": thermal_wind_block,
             "downburst": downburst_block,
@@ -518,7 +522,8 @@ class AuditAgent:
                 f"WBGT = 0.7T_wb+0.2T_g+0.1T_db (globe from solar load); "
                 f"M4: Gini/quintile-gap equity, Dunne 2013 work-capacity curves, "
                 f"thermal-wind proxy (Wallace & Hobbs §7.2.7 Eq. 7.20), "
-                f"downburst wet-bulb-depression diagnostic (Caracena 1990); units: °C"
+                f"downburst wet-bulb-depression diagnostic (Caracena 1990); "
+                f"ML: IsolationForest + 2σ z-scores for tile anomalies; units: °C"
             ),
             "warnings": snapshot.warnings,
         }

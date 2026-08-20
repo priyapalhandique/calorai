@@ -1,0 +1,22 @@
+{
+  "artifact": "data\\models\\forecast_v1.joblib",
+  "features": [
+    "irradiance_w_m2",
+    "albedo",
+    "emissivity",
+    "convective_coefficient",
+    "air_temperature_c",
+    "radiative_environment_c",
+    "storage_flux_w_m2",
+    "latent_flux_w_m2"
+  ],
+  "n_rows": 100000,
+  "holdout_mae_c": 0.7503,
+  "holdout_rmse_c": 0.9661,
+  "r2": 0.9966,
+  "baseline_mae_c": 13.0808,
+  "improvement_pct": 94.3,
+  "teacher": "equilibrium_surface_temperature_c (closed-form physics solve)",
+  "validation": "held-out synthetic rows now; real FortyGuard 24-h series validation lands in docs/ml-validation.md post-deploy (deferred, honest)",
+  "seed": 42
+}

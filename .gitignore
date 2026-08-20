@@ -250,3 +250,11 @@ data/street_view/*
 !data/env_params/
 data/env_params/*
 !data/env_params/env_params_parcel_*.json
+
+# ...and one more deliberate exception: the committed ML artifact
+# (physics-informed forecast surrogate). Shipping it makes the demo
+# deterministic on a fresh clone / Render — zero training, zero credits.
+!data/models/
+data/models/*
+!data/models/forecast_v1.joblib
+!data/models/forecast_v1.meta.json

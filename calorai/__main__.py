@@ -38,15 +38,28 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("serve", help="run the FastAPI web app on :8000")
 
-    args = parser.parse_args(argv)
+    train = sub.add_parser(
+        "train-forecast",
+        help="train the physics-informed forecast surrogate (ML, D6)",
+    )
+    train.add_argument("--rows", type=int, default=100_000, help="synthetic rows to train on")
+    train.add_argument("--out", default="data/models/forecast_v1.joblib", help="artifact path")
 
-    from .agent import AuditAgent, AuditRequest
+    args = parser.parse_args(argv)
 
     if args.command == "serve":
         import uvicorn
 
         uvicorn.run("calorai.main:app", host="127.0.0.1", port=8000)
         return 0
+
+    if args.command == "train-forecast":
+        from .ml.forecast import train_forecast
+
+        train_forecast(n_rows=args.rows, out_path=args.out)
+        return 0
+
+    from .agent import AuditAgent, AuditRequest
 
     request = AuditRequest(
         district=args.district,
