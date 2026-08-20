@@ -25,6 +25,9 @@
   #pdf { background:transparent; border:1px solid var(--accent); color:var(--accent); margin-top:8px; }
   #pdf:not(:disabled) { cursor:pointer; }
   #pdf:not(:disabled):hover { background:rgba(255,180,84,.12); }
+  #export { background:transparent; border:1px solid var(--cool); color:var(--cool); margin-top:8px; }
+  #export:not(:disabled) { cursor:pointer; }
+  #export:not(:disabled):hover { background:rgba(93,185,255,.12); }
   #status { font-size:12px; color:var(--muted); margin-top:10px; min-height:16px; }
   #report { white-space:normal; line-height:1.55; font-size:14.5px; }
   #report h1,#report h2,#report h3 { color:var(--accent); margin:1.2em 0 .4em; }
@@ -68,6 +71,7 @@
     </select>
     <button id="run">Run audit</button>
     <button id="pdf" disabled>Download PDF report</button>
+    <button id="export" disabled>Download interop package (GeoJSON + CSV)</button>
     <div id="status"></div>
   </aside>
   <main class="panel"><div id="report">Pick a district and run an audit — every °C comes
@@ -114,6 +118,7 @@ $("run").onclick = async () => {
     $("report").innerHTML = md(narrative);
     $("status").textContent = `source: ${data.source} · ${data.pipeline}`;
     $("pdf").disabled = false;
+    $("export").disabled = false;
   } catch (e) {
     $("report").innerHTML = `<h2>Network error</h2><p>${md(String(e))}</p>`;
   } finally { btn.disabled = false; }
@@ -125,6 +130,14 @@ $("pdf").onclick = () => {
     source: $("source").value,
   });
   window.location.href = "/api/report?" + params.toString();
+};
+$("export").onclick = () => {
+  const params = new URLSearchParams({
+    district: $("district").value, date: $("date").value,
+    hour: $("hour").value, threshold_c: $("threshold").value,
+    source: $("source").value,
+  });
+  window.location.href = "/api/export?" + params.toString();
 };
 loadDistricts();
 </script>

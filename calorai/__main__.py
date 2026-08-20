@@ -31,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     audit.add_argument("--mock", action="store_true", help="force offline mock data")
     audit.add_argument("--narrator", default="auto", choices=("auto", "template", "github-models"))
     audit.add_argument("--pdf", action="store_true", help="also render a PDF report to outputs/")
+    audit.add_argument(
+        "--export-out", metavar="DIR", default=None,
+        help="also write the Forma-friendly interop package (GeoJSON + CSVs) to DIR",
+    )
 
     sub.add_parser("serve", help="run the FastAPI web app on :8000")
 
@@ -63,6 +67,12 @@ def main(argv: list[str] | None = None) -> int:
 
         path = build_pdf_report(report)
         print(f"PDF report written to {path}")
+    if args.export_out:
+        from .interop import export_audit
+
+        snapshot = AuditAgent(request).fetch_snapshot()
+        for path in export_audit(report, snapshot, args.threshold, args.export_out):
+            print(f"interop export written to {path}")
     return 0
 
 

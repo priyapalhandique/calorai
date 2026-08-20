@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: calorai
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn calorai.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    healthCheckPath: /api/health
+    envVars:
+      - key: FORTYGUARD_API_KEY
+        sync: false
+        comment: FortyGuard hackathon plan API key (never commit; demo falls back to mock when absent)
+      - key: GITHUB_MODELS_TOKEN
+        sync: false
+        comment: Optional — GitHub PAT with Models permission for the LLM narrator/planner; template fallback otherwise
+      - key: PYTHON_VERSION
+        value: 3.12.4

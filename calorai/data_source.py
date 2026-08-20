@@ -216,6 +216,37 @@ DISTRICTS: dict[str, District] = {
         albedo=0.18, humidity_base_pct=50.0, wind_base_m_s=3.0,
         h_over_w=0.6, wall_albedo=0.25, utc_offset_hours=-6.0,
     ),
+    # Tier 2 — subdivision deep-dive districts (hyperlocal AOIs).
+    "maryvale": District(
+        name="Maryvale, Phoenix", lat=33.4630, lon=-112.1610,
+        base_mean_c=37.5, base_amplitude_c=8.5, heat_island_c=5.5,
+        albedo=0.10, humidity_base_pct=24.0, wind_base_m_s=2.0,
+        h_over_w=0.3, wall_albedo=0.15, utc_offset_hours=-7.0,
+        # Tract-housing fabric: thin asphalt, dark roofs, low canyons —
+        # the classic redlined heat-equity neighborhood profile.
+        material_k_w_m_k=0.9,
+        material_density_kg_m3=2000.0,
+        material_specific_heat_j_kg_k=1000.0,
+        evaporative_fraction=0.02,
+    ),
+    "vegas-strip": District(
+        name="Las Vegas Strip", lat=36.1147, lon=-115.1728,
+        base_mean_c=36.5, base_amplitude_c=8.5, heat_island_c=6.0,
+        albedo=0.15, humidity_base_pct=15.0, wind_base_m_s=3.0,
+        cloud_base_pct=5.0,
+        h_over_w=1.2, wall_albedo=0.25, utc_offset_hours=-8.0,
+        # Hotel canyons + acres of parking; driest big-city sky (99% clear).
+        evaporative_fraction=0.01,
+    ),
+    "east-harlem": District(
+        name="East Harlem, NYC", lat=40.7947, lon=-73.9350,
+        base_mean_c=29.5, base_amplitude_c=6.5, heat_island_c=5.5,
+        albedo=0.18, humidity_base_pct=62.0, wind_base_m_s=3.5,
+        cloud_base_pct=35.0,
+        h_over_w=1.0, wall_albedo=0.28, utc_offset_hours=-5.0,
+        # Equity contrast vs Lower Manhattan: denser, hotter, less green.
+        evaporative_fraction=0.05,
+    ),
 }
 
 

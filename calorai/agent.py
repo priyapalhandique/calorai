@@ -102,17 +102,22 @@ class AuditAgent:
 
     # ----------------------------------------------------------------- tools
 
-    def run(self, narrate: bool = True) -> dict[str, Any]:
-        """Execute the full audit; returns the structured report (and an
-        optional narration string under ``narrative``)."""
+    def fetch_snapshot(self) -> Any:
+        """Fetch (and cache) the district snapshot for this request."""
         req = self.request
-        snapshot = self.source.get_district_snapshot(
+        return self.source.get_district_snapshot(
             req.district,
             req.date,
             hour=req.hour,
             with_exceedance=req.with_exceedance,
             threshold=req.threshold_c,
         )
+
+    def run(self, narrate: bool = True) -> dict[str, Any]:
+        """Execute the full audit; returns the structured report (and an
+        optional narration string under ``narrative``)."""
+        req = self.request
+        snapshot = self.fetch_snapshot()
         heatmap = snapshot.heatmap
         if heatmap is None:
             raise AuditError("heatmap layer unavailable")

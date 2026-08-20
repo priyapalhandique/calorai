@@ -132,6 +132,44 @@ def report_pdf(
     )
 
 
+@app.get("/api/export")
+def export_package(
+    district: str = Query("phoenix", description="district key from /api/districts"),
+    date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
+    hour: int = Query(14, ge=0, le=23),
+    threshold_c: float = Query(30.0),
+    source: str | None = Query(None, description="auto | mock | live"),
+) -> Response:
+    """Forma-friendly interop package: tile GeoJSON + audit CSV + interventions CSV (ZIP)."""
+    from .interop import export_zip_bytes
+
+    try:
+        request = AuditRequest(
+            district=district,
+            date=date,
+            hour=hour,
+            threshold_c=threshold_c,
+            data_source=source,
+            narrator_kind=None,
+        )
+        agent = AuditAgent(request)
+    except (AuditError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    report = agent.run(narrate=False)
+    snapshot = agent.fetch_snapshot()
+    content = export_zip_bytes(report, snapshot, threshold_c)
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=calorai_{report['district'].replace(' ', '-')}"
+                f"_{report['date']}_interop.zip"
+            )
+        },
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
 
