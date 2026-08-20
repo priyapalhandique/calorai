@@ -11,12 +11,14 @@ POST /api/ask           agentic natural-language query (D7)
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent import AuditAgent, AuditError, AuditRequest
@@ -31,6 +33,7 @@ app = FastAPI(
 )
 
 _UI_PATH = Path(__file__).resolve().parent.parent / "ui" / "index.html"
+app.mount("/ui", StaticFiles(directory=_UI_PATH.parent), name="ui")
 
 
 class AuditBody(BaseModel):
@@ -107,11 +110,16 @@ class AskBody(BaseModel):
     hour: int | None = Field(None, ge=0, le=23, description="default audit hour")
     threshold_c: float | None = Field(None, description="exceedance threshold °C")
     source: str | None = Field(None, description="auto | mock | live")
+    profile: dict[str, Any] | None = Field(
+        None,
+        description="demo persona: units c|f, intensity, threshold_c, home_district, voice",
+    )
 
 
 @app.post("/api/ask")
 def ask(body: AskBody) -> dict[str, Any]:
-    """Agentic endpoint (D7): plan -> tools -> trace -> answer."""
+    """Agentic endpoint (D7): plan -> tools -> trace -> answer + spoken tldr."""
+    from .personal import UserProfile
     from .planner import plan_and_run
     from .tools import AgentContext
 
@@ -122,7 +130,72 @@ def ask(body: AskBody) -> dict[str, Any]:
         threshold_c=body.threshold_c if body.threshold_c is not None else 30.0,
         source=body.source,
     )
-    return plan_and_run(body.query, ctx)
+    return plan_and_run(body.query, ctx, profile=UserProfile.from_dict(body.profile))
+
+
+@app.get("/api/analysis")
+def analysis(
+    district: str = Query("phoenix", description="district key from /api/districts"),
+    date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
+    hour: int = Query(14, ge=0, le=23),
+    threshold_c: float = Query(30.0),
+    source: str | None = Query(None, description="auto | mock | live"),
+) -> dict[str, Any]:
+    """Curated UI payload: tiles + every dashboard block, server-computed.
+
+    Tiles are stride-subsampled (deterministic) so live grids of any
+    size stay light on the wire.
+    """
+    from .data_source import MAX_UI_TILES
+
+    try:
+        request = AuditRequest(
+            district=district,
+            date=date,
+            hour=hour,
+            threshold_c=threshold_c,
+            data_source=source,
+            narrator_kind=None,
+        )
+        agent = AuditAgent(request)
+    except (AuditError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    report = agent.run(narrate=False)
+    snapshot = agent.fetch_snapshot()
+    heatmap = snapshot.heatmap
+    tiles = heatmap.tiles if heatmap else []
+    n_total = len(tiles)
+    stride = max(1, math.ceil(n_total / MAX_UI_TILES))
+    shown = tiles[::stride][:MAX_UI_TILES]
+    return {
+        "district": report["district"],
+        "date": report["date"],
+        "hour": report["snapshot"]["hour"],
+        "threshold_c": threshold_c,
+        "source": report["source"],
+        "one_liner": report["one_liner"],
+        "tiles": shown,
+        "tile_count_total": n_total,
+        "tile_count_shown": len(shown),
+        "heatmap": {
+            "min_c": round(heatmap.min, 2),
+            "mean_c": round(heatmap.mean, 2),
+            "max_c": round(heatmap.max, 2),
+            "units": heatmap.units,
+        },
+        "diurnal": report["diurnal"],
+        "attribution": report["attribution"],
+        "exposure": report["exposure"],
+        "vulnerability": report["vulnerability"],
+        "interventions": report["interventions"][:3],
+        "thermal_wind": report["thermal_wind"],
+        "downburst": report["downburst"],
+        "response": report["response"],
+        "analysis": report["analysis"],
+        "alerts": (report.get("alerts") or {}).get("alerts", []),
+        "warnings": report.get("warnings", []),
+        "provenance": report.get("provenance", ""),
+    }
 
 
 @app.get("/api/report")

@@ -28,6 +28,10 @@ load_dotenv()
 from .physics.units import normalize_celsius  # noqa: E402
 
 
+#: UI payload cap for tile arrays (deterministic stride subsampling).
+MAX_UI_TILES = 900
+
+
 # ------------------------------------------------------------------ models
 
 

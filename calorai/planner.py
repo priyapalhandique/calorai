@@ -16,12 +16,14 @@ the answer, so the UI can show exactly which instruments ran.
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import time
 from typing import Any
 
 from .narrator import GitHubModelsNarrator
+from .personal import UserProfile, format_temp
 from .tools import AgentContext, _TOOL_KEYWORDS, execute_tool, list_tools
 
 CHAIN_TEMPLATES: dict[str, list[str]] = {
@@ -141,11 +143,23 @@ _DAY_OFFSETS: dict[str, int] = {
     "day after": 2,
 }
 
+#: Follow-up pronouns that resolve against the last audited scope.
+_FOLLOWUP_RE = re.compile(r"\b(it|its|that|there|here|this city|my city)\b")
+
 
 def _guess_district(query: str, ctx: AgentContext) -> str | None:
+    q = query.lower()
     for alias, canonical in _DISTRICT_ALIASES.items():
-        if alias in query.lower():
+        if alias in q:
             return canonical
+    # Follow-up resolution (D8): "what about its cost?" -> last district.
+    if _FOLLOWUP_RE.search(q) and ctx.last_district:
+        return ctx.last_district
+    from .data_source import DISTRICTS
+
+    match = difflib.get_close_matches(q.strip(), list(DISTRICTS.keys()), n=1, cutoff=0.6)
+    if match:
+        return match[0]
     return None
 
 
@@ -269,25 +283,52 @@ def _llm_refine(query: str, ctx: AgentContext, steps: list[dict[str, Any]]) -> t
         return steps, "llm-failed"
 
 
-def plan_and_run(query: str, ctx: AgentContext) -> dict[str, Any]:
-    """Full pipeline: match -> refine -> execute -> trace + answer."""
+def plan_and_run(
+    query: str,
+    ctx: AgentContext,
+    profile: UserProfile | None = None,
+) -> dict[str, Any]:
+    """Full pipeline: match -> refine -> execute -> trace + answer.
+
+    ``profile`` (D8) personalizes defaults (home district, threshold)
+    and the spoken summary (units, work intensity).
+    """
     started = time.perf_counter()
-    steps, mode = deterministic_plan(query, ctx)
+    profile = profile or UserProfile()
+    run_ctx = ctx
+    if profile.home_district or profile.threshold_c is not None:
+        run_ctx = AgentContext(
+            district=profile.home_district or ctx.district,
+            date=ctx.date,
+            hour=ctx.hour,
+            threshold_c=(
+                profile.threshold_c
+                if profile.threshold_c is not None
+                else ctx.threshold_c
+            ),
+            source=ctx.source,
+        )
+        run_ctx.last_district = ctx.last_district
+        run_ctx.last_date = ctx.last_date
+        run_ctx.last_hour = ctx.last_hour
+    steps, mode = deterministic_plan(query, run_ctx)
     refinement = None
-    steps, refinement = _llm_refine(query, ctx, steps)
+    steps, refinement = _llm_refine(query, run_ctx, steps)
 
     trace: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
     for step in steps:
-        tr = execute_tool(step["tool"], step.get("args") or {}, ctx)
+        tr = execute_tool(step["tool"], step.get("args") or {}, run_ctx)
         trace.append(tr.to_dict())
         if tr.ok and tr.result:
             results.append({"tool": tr.name, "result": tr.result, "summary": tr.summary})
 
-    answer = _assemble_answer(query, results, mode)
+    answer = _assemble_answer(query, results, mode, profile)
+    tldr = _assemble_tldr(query, results, profile)
     return {
         "query": query,
         "answer": answer,
+        "answer_tldr": tldr,
         "mode": mode,
         "refinement": refinement,
         "trace": trace,
@@ -295,7 +336,12 @@ def plan_and_run(query: str, ctx: AgentContext) -> dict[str, Any]:
     }
 
 
-def _assemble_answer(query: str, results: list[dict[str, Any]], mode: str) -> str:
+def _assemble_answer(
+    query: str,
+    results: list[dict[str, Any]],
+    mode: str,
+    profile: UserProfile | None = None,
+) -> str:
     """Deterministic markdown answer from tool results (no model required)."""
     lines: list[str] = []
     if not results:
@@ -400,5 +446,99 @@ def _assemble_answer(query: str, results: list[dict[str, Any]], mode: str) -> st
         else:
             lines.append(item["summary"])
 
+    personal = _personalize(results, profile)
+    if personal:
+        lines.append(personal)
+    unit_note = _unit_note(results, profile)
+    if unit_note:
+        lines.append(unit_note)
     lines.append(f"*Mode: {mode}; {len(results)} instrument(s) ran; every number traces to the physics layer.*")
     return "\n\n".join(lines)
+
+
+def _personalize(
+    results: list[dict[str, Any]], profile: UserProfile | None
+) -> str | None:
+    """Work-intensity personalization for planning/risk answers (D8)."""
+    if profile is None:
+        return None
+    for item in results:
+        r = item["result"]
+        if item["tool"] in ("audit", "risk"):
+            prod = (r.get("analysis") or {}).get("productivity") or {}
+            block = prod.get(profile.intensity) or {}
+            loss = block.get("loss_pct")
+            if loss is not None:
+                usd = block.get("usd_per_year")
+                usd_text = f" (≈ ${usd:,.0f} USD/yr)" if usd is not None else ""
+                return (
+                    f"For your **{profile.intensity}-work** profile, the heat burden "
+                    f"cuts work capacity by **{loss}%**{usd_text} at this hour."
+                )
+    return None
+
+
+def _unit_note(
+    results: list[dict[str, Any]], profile: UserProfile | None
+) -> str | None:
+    """Honest unit note: the markdown body stays °C; the note shows the
+    profile's conversion once, and the spoken summary uses °F."""
+    if profile is None or profile.units != "f":
+        return None
+    for item in results:
+        r = item["result"]
+        if item["tool"] == "audit":
+            c = r["snapshot"]["max_c"]
+        elif item["tool"] == "forecast" and r.get("mode") == "district_24h":
+            c = r["peak_skin_c"]
+        elif item["tool"] == "forecast":
+            c = r["predicted_skin_c"]
+        elif item["tool"] == "risk":
+            c = r["exposure"]["wbgt_c"]
+        else:
+            continue
+        return f"Unit preference: °F active — {c:.1f} °C ≈ {c * 9.0 / 5.0 + 32.0:.1f} °F."
+    return None
+
+
+def _assemble_tldr(
+    query: str,
+    results: list[dict[str, Any]],
+    profile: UserProfile | None,
+) -> str:
+    """One spoken-ready sentence; °F when the profile asks for it (D8)."""
+    if not results:
+        return "I could not run any instruments for that request."
+    u = profile.units if profile else "c"
+    item = results[0]
+    r = item["result"]
+    tool = item["tool"]
+    if tool == "audit":
+        return (
+            f"{r['district']} at {r['snapshot']['hour']}:00 — tiles peak at "
+            f"{format_temp(r['snapshot']['max_c'], u)}, WBGT "
+            f"{format_temp(r['exposure']['wbgt_c'], u)}, "
+            f"{r['vulnerability']['score']['band']} overall risk."
+        )
+    if tool == "forecast" and r.get("mode") == "district_24h":
+        return f"Forecast peak {format_temp(r['peak_skin_c'], u)} at {r['peak_hour']}:00."
+    if tool == "forecast":
+        return f"Predicted skin temperature {format_temp(r['predicted_skin_c'], u)}."
+    if tool == "risk":
+        return (
+            f"Heat risk for {r['district']}: WBGT {format_temp(r['exposure']['wbgt_c'], u)}, "
+            f"{r['exposure']['level']}."
+        )
+    if tool == "respond_mist":
+        m = r.get("misting") or {}
+        if m:
+            return (
+                f"Misting recommended: {m.get('placement', '')} side, "
+                f"{m.get('water_m3_per_hour', '')} cubic meters per hour."
+            )
+    if tool == "economy":
+        return (
+            f"District cost of heat: about ${r.get('total_usd_per_year', 0):,.0f} "
+            f"US dollars per year."
+        )
+    return str(item.get("summary") or "Done.")

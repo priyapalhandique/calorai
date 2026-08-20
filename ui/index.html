@@ -1,186 +1,174 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>calorai — City Heat-Budget Auditor</title>
-<style>
-  :root { --bg:#0b1220; --panel:#111a2e; --line:#1f2c47; --text:#e6ecf7; --muted:#8fa3c0;
-          --accent:#ffb454; --hot:#ff5d5d; --cool:#5db9ff; --ok:#4cd98d; }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
-  header { display:flex; align-items:baseline; gap:14px; padding:18px 24px; border-bottom:1px solid var(--line); }
-  h1 { margin:0; font-size:22px; letter-spacing:.4px; }
-  h1 .dot { color:var(--accent); }
-  header small { color:var(--muted); }
-  .container { display:grid; grid-template-columns:320px 1fr; gap:18px; padding:18px 24px; align-items:start; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
-  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
-  input,select,textarea { width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line);
-                 background:#0d1526; color:var(--text); font-size:14px; font-family:inherit; }
-  textarea { resize:vertical; min-height:64px; }
-  #askbtn { margin-top:8px; background:linear-gradient(90deg,#4cd98d,#3fb6d8); color:#0a1410; }
-  details.trace { margin-top:10px; font-size:12px; color:var(--muted); }
-  details.trace summary { cursor:pointer; color:var(--cool); }
-  details.trace table { width:100%; font-size:12px; margin-top:6px; }
-  details.trace td { padding:2px 6px; border-bottom:1px solid var(--line); }
-  .ok { color:var(--ok); } .err { color:var(--hot); }
-  button { margin-top:16px; width:100%; padding:10px; border:0; border-radius:8px;
-           background:linear-gradient(90deg,#ff8c42,#ffb454); color:#14100a; font-weight:700;
-           font-size:14px; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:wait; }
-  #pdf { background:transparent; border:1px solid var(--accent); color:var(--accent); margin-top:8px; }
-  #pdf:not(:disabled) { cursor:pointer; }
-  #pdf:not(:disabled):hover { background:rgba(255,180,84,.12); }
-  #export { background:transparent; border:1px solid var(--cool); color:var(--cool); margin-top:8px; }
-  #export:not(:disabled) { cursor:pointer; }
-  #export:not(:disabled):hover { background:rgba(93,185,255,.12); }
-  #status { font-size:12px; color:var(--muted); margin-top:10px; min-height:16px; }
-  #report { white-space:normal; line-height:1.55; font-size:14.5px; }
-  #report h1,#report h2,#report h3 { color:var(--accent); margin:1.2em 0 .4em; }
-  #report h1 { font-size:20px; } #report h2 { font-size:17px; } #report h3 { font-size:15px; }
-  #report table { border-collapse:collapse; width:100%; margin:8px 0; font-size:13.5px; }
-  #report th,#report td { border:1px solid var(--line); padding:6px 10px; text-align:left; }
-  #report th { background:#0d1526; color:var(--muted); }
-  #report blockquote { border-left:3px solid var(--accent); margin:10px 0; padding:4px 12px; color:var(--muted); }
-  #report strong { color:var(--text); }
-  .spinner { border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%;
-             width:18px; height:18px; display:inline-block; animation:spin .8s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  @media (max-width:900px) { .container { grid-template-columns:1fr; } }
-</style>
+<link rel="stylesheet" href="/ui/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23ff8600'/></svg>">
 </head>
 <body>
-<header>
-  <h1>calorai<span class="dot">.</span> — city heat-budget auditor</h1>
-  <small>physics-first · FortyGuard Temperature API · Hackathon'26</small>
+<canvas id="starfield" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>calorai<span class="dot">.</span></h1>
+    <p class="tagline">city heat-budget auditor · physics-first · FortyGuard Temperature API</p>
+  </div>
+  <div class="top-actions">
+    <button id="theme" class="pill ghost" title="toggle light/dark">dark / light</button>
+    <button id="voiceToggle" class="pill ghost" title="spoken answers">voice <span class="pill-badge" id="voiceState">off</span></button>
+  </div>
 </header>
-<div class="container">
-  <aside class="panel">
-    <label for="ask">Ask the agent</label>
-    <textarea id="ask" placeholder="e.g. plan tomorrow for Maryvale — misting, worker risk, wind, cost"></textarea>
-    <button id="askbtn">Ask</button>
-    <label for="district">District</label>
-    <select id="district"></select>
-    <label for="date">Date (catalog 2021–today, US coverage)</label>
-    <input id="date" type="date" value="2024-07-15">
-    <label for="hour">Audit hour (local)</label>
-    <select id="hour"></select>
-    <label for="threshold">Exceedance threshold °C</label>
-    <input id="threshold" type="number" min="20" max="50" step="0.5" value="30">
-    <label for="source">Data source</label>
-    <select id="source">
-      <option value="auto">auto (live → mock fallback)</option>
-      <option value="mock">mock (offline demo)</option>
-    </select>
-    <label for="narration">Narration</label>
-    <select id="narration">
-      <option value="auto">auto (GitHub Models → template)</option>
-      <option value="template">template (deterministic)</option>
-      <option value="none">none (raw JSON)</option>
-    </select>
-    <button id="run">Run audit</button>
-    <button id="pdf" disabled>Download PDF report</button>
-    <button id="export" disabled>Download interop package (GeoJSON + CSV)</button>
-    <div id="status"></div>
-  </aside>
-  <main class="panel"><div id="report">Pick a district and run an audit — every °C comes
-    from a physics equation and real FortyGuard data.</div></main>
-</div>
-<script>
-const $ = id => document.getElementById(id);
-const md = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-  .replace(/^###### (.*)$/gm,"<h6>$1</h6>").replace(/^##### (.*)$/gm,"<h5>$1</h5>")
-  .replace(/^#### (.*)$/gm,"<h4>$1</h4>").replace(/^### (.*)$/gm,"<h3>$1</h3>")
-  .replace(/^## (.*)$/gm,"<h2>$1</h2>").replace(/^# (.*)$/gm,"<h1>$1</h1>")
-  .replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\*(.*?)\*/g,"<em>$1</em>")
-  .replace(/^> (.*)$/gm,"<blockquote>$1</blockquote>")
-  .replace(/\|([^\n]+)\|\n/g, row => {
-    const cells = row.split("|").slice(1,-2).map(c => c.trim());
-    if (!cells.length) return "";
-    const isHeader = /^[-: ]+$/.test(cells.join(""));
-    if (isHeader) return "";
-    return "<tr>" + cells.map(c => `<td>${c}</td>`).join("") + "</tr>";
-  })
-  .replace(/(<tr>.*<\/tr>\n?)(?=<tr>)/g, m => m); // keep rows; header handled below
-async function loadDistricts() {
-  const res = await fetch("/api/districts");
-  const list = await res.json();
-  $("district").innerHTML = list.map(d =>
-    `<option value="${d.key}">${d.name} (mean ${d.base_mean_c} °C)</option>`).join("");
-}
-for (let h = 0; h <= 23; h++) $("hour").innerHTML += `<option value="${h}"${h===14?" selected":""}>${String(h).padStart(2,"0")}:00</option>`;
-$("run").onclick = async () => {
-  const btn = $("run"); btn.disabled = true; $("status").innerHTML = '<span class="spinner"></span> computing…';
-  try {
-    const res = await fetch("/api/audit", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        district: $("district").value, date: $("date").value,
-        hour: +$("hour").value, threshold_c: +$("threshold").value,
-        source: $("source").value, narration: $("narration").value,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { $("report").innerHTML = `<h2>Error</h2><p>${md(data.detail||"failed")}</p>`; return; }
-    const narrative = data.narrative || ("<pre>" + md(JSON.stringify(data,null,2)) + "</pre>");
-    $("report").innerHTML = md(narrative);
-    $("status").textContent = `source: ${data.source} · ${data.pipeline}`;
-    $("pdf").disabled = false;
-    $("export").disabled = false;
-  } catch (e) {
-    $("report").innerHTML = `<h2>Network error</h2><p>${md(String(e))}</p>`;
-  } finally { btn.disabled = false; }
-};
-$("askbtn").onclick = async () => {
-  const q = $("ask").value.trim();
-  if (!q) return;
-  const btn = $("askbtn"); btn.disabled = true;
-  $("report").innerHTML = '<span class="spinner"></span> planning…';
-  try {
-    const res = await fetch("/api/ask", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        query: q,
-        district: $("district").value,
-        date: $("date").value,
-        hour: +$("hour").value,
-        threshold_c: +$("threshold").value,
-        source: $("source").value,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { $("report").innerHTML = `<h2>Error</h2><p>${md(data.detail||"failed")}</p>`; return; }
-    const rows = data.trace.map(t =>
-      `<tr><td>${md(t.tool)}</td><td class="${t.ok?"ok":"err"}">${t.ok?"ok":"fail"}</td>` +
-      `<td>${md(String(t.summary||""))}</td><td>${t.duration_ms}ms</td></tr>`).join("");
-    $("report").innerHTML = md(data.answer) +
-      `<details class="trace"><summary>trace · mode ${md(data.mode)} · refinement ${md(data.refinement||"n/a")} · ${data.duration_ms}ms</summary>` +
-      `<table><tr><th>tool</th><th>status</th><th>summary</th><th>ms</th></tr>${rows}</table></details>`;
-    $("status").textContent = `agent answered in ${data.duration_ms}ms`;
-  } catch (e) {
-    $("report").innerHTML = `<h2>Network error</h2><p>${md(String(e))}</p>`;
-  } finally { btn.disabled = false; }
-};
-$("pdf").onclick = () => {
-  const params = new URLSearchParams({
-    district: $("district").value, date: $("date").value,
-    hour: $("hour").value, threshold_c: $("threshold").value,
-    source: $("source").value,
-  });
-  window.location.href = "/api/report?" + params.toString();
-};
-$("export").onclick = () => {
-  const params = new URLSearchParams({
-    district: $("district").value, date: $("date").value,
-    hour: $("hour").value, threshold_c: $("threshold").value,
-    source: $("source").value,
-  });
-  window.location.href = "/api/export?" + params.toString();
-};
-loadDistricts();
-</script>
+
+<nav class="tabs" aria-label="dashboard acts">
+  <button class="tab active" data-act="overview">Overview</button>
+  <button class="tab" data-act="physics">Physics</button>
+  <button class="tab" data-act="analytics">Analytics</button>
+  <button class="tab" data-act="ask">Ask</button>
+</nav>
+
+<main>
+  <section id="act-overview" class="act">
+    <aside class="controls panel">
+      <h2>Audit scope</h2>
+      <label for="district">District</label>
+      <select id="district"></select>
+      <label for="date">Date (catalog 2021–today, US coverage)</label>
+      <input id="date" type="date" value="2024-07-15">
+      <label for="hour">Audit hour (local)</label>
+      <select id="hour"></select>
+      <label for="threshold">Exceedance threshold °C</label>
+      <input id="threshold" type="number" min="20" max="50" step="0.5" value="30">
+      <label for="source">Data source</label>
+      <select id="source">
+        <option value="auto">auto (live → mock fallback)</option>
+        <option value="mock">mock (offline demo)</option>
+      </select>
+      <label for="narration">Narration</label>
+      <select id="narration">
+        <option value="auto">auto (GitHub Models → template)</option>
+        <option value="template">template (deterministic)</option>
+        <option value="none">none (raw JSON)</option>
+      </select>
+      <button id="run" class="pill primary">Run audit</button>
+      <div class="control-buttons">
+        <button id="pdf" class="pill ghost" disabled>PDF report</button>
+        <button id="export" class="pill ghost" disabled>Interop package</button>
+      </div>
+      <details class="profile" id="profilePanel">
+        <summary>Personal profile</summary>
+        <label for="units">Temperature units</label>
+        <select id="units"><option value="c">°C</option><option value="f">°F</option></select>
+        <label for="intensity">Work intensity</label>
+        <select id="intensity">
+          <option value="light">light</option>
+          <option value="moderate" selected>moderate</option>
+          <option value="heavy">heavy</option>
+        </select>
+        <label for="homeDistrict">Home district</label>
+        <select id="homeDistrict"><option value="">— none —</option></select>
+        <p class="hint">Personalizes spoken answers, units, risk framing and defaults. Stored only in this browser.</p>
+      </details>
+      <div id="status" class="status"></div>
+    </aside>
+    <div class="stage panel">
+      <div class="stat-row">
+        <div class="stat"><span class="stat-label">Tile max</span><span class="stat-value" id="sMax">—</span></div>
+        <div class="stat"><span class="stat-label">WBGT</span><span class="stat-value" id="sWbgt">—</span></div>
+        <div class="stat"><span class="stat-label">> threshold</span><span class="stat-value" id="sHrs">—</span></div>
+        <div class="stat"><span class="stat-label">Cost of heat / yr</span><span class="stat-value" id="sCost">—</span></div>
+        <div class="stat"><span class="stat-label">Overall risk</span><span class="stat-value" id="sRisk">—</span></div>
+      </div>
+      <div class="chart-head">
+        <span class="chart-title">Surface temperature field</span>
+        <span class="chart-note" id="hmLabel"></span>
+      </div>
+      <canvas id="heatmap" class="chart"></canvas>
+      <input id="hmSlider" type="range" min="0" max="23" value="14" class="slider">
+      <div class="legend">
+        <span class="legend-bar" id="hmLegend"></span>
+        <div class="legend-labels"><span id="hmMin">—</span><span id="hmMax">—</span></div>
+      </div>
+      <div class="chart-head">
+        <span class="chart-title">Diurnal apparent temperature & solar load</span>
+        <span class="chart-note" id="dNote">°C · W/m²</span>
+      </div>
+      <canvas id="diurnal" class="chart"></canvas>
+    </div>
+  </section>
+
+  <section id="act-physics" class="act" hidden>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="chart-head">
+          <span class="chart-title">Thermal-wind circulation</span>
+          <span class="chart-note" id="circNote"></span>
+        </div>
+        <canvas id="circulation" class="chart tall"></canvas>
+        <div class="kv" id="circKv"></div>
+      </div>
+      <div class="panel">
+        <div class="chart-head"><span class="chart-title">Energy balance at the audit hour</span><span class="chart-note">W/m²</span></div>
+        <canvas id="energy" class="chart"></canvas>
+        <div class="chart-head"><span class="chart-title">Downburst wet-bulb depression</span><span class="chart-note">24 h · K</span></div>
+        <canvas id="downburst" class="chart"></canvas>
+      </div>
+    </div>
+    <div class="panel response-panel">
+      <h2>Responder plan</h2>
+      <div id="responseBody" class="response-body"></div>
+    </div>
+  </section>
+
+  <section id="act-analytics" class="act" hidden>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="chart-head"><span class="chart-title">Tile temperature distribution</span><span class="chart-note" id="histNote"></span></div>
+        <canvas id="histogram" class="chart"></canvas>
+        <div class="kv" id="histKv"></div>
+      </div>
+      <div class="panel">
+        <div class="chart-head"><span class="chart-title">Hourly tile spread</span><span class="chart-note">reconstructed · °C</span></div>
+        <canvas id="hourly" class="chart"></canvas>
+      </div>
+      <div class="panel">
+        <div class="chart-head"><span class="chart-title">Radial UHI cross-section</span><span class="chart-note" id="radialNote"></span></div>
+        <canvas id="radial" class="chart"></canvas>
+      </div>
+      <div class="panel">
+        <div class="chart-head"><span class="chart-title">Percentiles & outliers</span></div>
+        <div id="percentileBody" class="kv-table"></div>
+        <div id="anomalyBody" class="anomaly-list"></div>
+      </div>
+      <div class="panel equity-panel">
+        <h2>Heat equity</h2>
+        <div id="equityBody" class="kv-table"></div>
+      </div>
+      <div class="panel">
+        <h2>Alerts (Sentinel R1–R7)</h2>
+        <div id="alertsBody" class="alerts"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="act-ask" class="act" hidden>
+    <div class="panel chat-panel">
+      <h2>Ask the agent</h2>
+      <div id="chatLog" class="chat-log"></div>
+      <div class="chat-input-row">
+        <textarea id="ask" rows="2" placeholder="plan tomorrow for Maryvale — misting, worker risk, wind, cost"></textarea>
+        <button id="mic" class="pill ghost mic" title="voice input" aria-label="voice input">🎙</button>
+        <button id="askbtn" class="pill primary">Ask</button>
+      </div>
+      <div id="tracePanel" class="trace hidden"></div>
+      <p class="hint" id="voiceHint"></p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot"><span id="provenance"></span></footer>
+
+<script src="/ui/app.js"></script>
 </body>
 </html>

@@ -63,6 +63,11 @@ class AgentContext:
         self.threshold_c = threshold_c
         self.source = source
         self._memo: dict[tuple, dict[str, Any]] = {}
+        # Follow-up memory (D8): last scope actually audited, so "what
+        # about its cost?" resolves against the previous district/date.
+        self.last_district: str | None = None
+        self.last_date: str | None = None
+        self.last_hour: int | None = None
 
     def _key(self, district: str, date: str, hour: int, threshold_c: float, source: str | None):
         return (district, date, hour, round(threshold_c, 2), source)
@@ -96,6 +101,9 @@ class AgentContext:
                 )
             )
             self._memo[key] = agent.run(narrate=False)
+        self.last_district = d
+        self.last_date = dt
+        self.last_hour = h
         return self._memo[key]
 
 
@@ -197,7 +205,7 @@ def _forecast(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 )
 def _anomaly(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
-    return report["analysis"]["anomaly"]
+    return {**report["analysis"]["anomaly"], "district": report["district"]}
 
 
 @tool(
@@ -268,7 +276,7 @@ def _equity(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 )
 def _productivity(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
-    return report["analysis"]["productivity"]
+    return {**report["analysis"]["productivity"], "district": report["district"]}
 
 
 @tool(
@@ -278,7 +286,7 @@ def _productivity(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 )
 def _economy(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
-    return report["analysis"]["economy"]
+    return {**report["analysis"]["economy"], "district": report["district"]}
 
 
 @tool(
@@ -289,7 +297,7 @@ def _economy(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 )
 def _thermal_wind(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
-    return report["thermal_wind"]
+    return {**report["thermal_wind"], "district": report["district"]}
 
 
 @tool(
@@ -299,7 +307,7 @@ def _thermal_wind(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 )
 def _downburst(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
-    return report["downburst"]
+    return {**report["downburst"], "district": report["district"]}
 
 
 @tool(
