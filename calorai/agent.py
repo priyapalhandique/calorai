@@ -29,6 +29,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from .analyst import annualized_loss, district_cost_of_heat, heat_burden
 from .data_source import District, get_district, resolve_source
 from .narrator import make_narrator
 from .physics import (
@@ -61,7 +62,9 @@ from .physics.economics import (
     cooling_degree_hours,
     retrofit_roi,
 )
+from .physics.downburst import downburst_risk_series
 from .physics.facade import facade_heat_load_ranking
+from .physics.thermal_wind import urban_circulation
 from .physics.vulnerability import heat_vulnerability_score, worker_safety_alert
 
 #: Default envelope assumptions for the audit hour (physics constants).
@@ -365,6 +368,33 @@ class AuditAgent:
             air_c=air_c,
         )
 
+        # M4 — heat equity, productivity and the district cost of heat.
+        # All from already-audited numbers: no new API calls, no new
+        # physics beyond the documented Dunne (2013) / Kjellstrom (2009)
+        # work-capacity curves and the ROI module's energy figures.
+        equity_block = heat_burden(heatmap.tiles)
+        wbgt_c = float(exposure["wbgt_c"])
+        productivity_block = {
+            "moderate": annualized_loss(wbgt_c=wbgt_c, intensity="moderate"),
+            "heavy": annualized_loss(wbgt_c=wbgt_c, intensity="heavy"),
+            "wbgt_c": round(wbgt_c, 2),
+            "curve": "logistic parameterization of Dunne 2013 / Kjellstrom 2009",
+        }
+        roi_block = self._retrofit_roi(interventions[0])
+        economy_block = district_cost_of_heat(roi_block, wbgt_c=wbgt_c)
+
+        # Thermal-wind proxy (Wallace & Hobbs §7.2.7, Eq. 7.20) and the
+        # downburst wet-bulb-depression diagnostic (Caracena 1990) —
+        # both relative/caveated; both computed from data already fetched.
+        thermal_wind_block = urban_circulation(heatmap.tiles, heatmap.mean)
+        env_dict = {
+            "hour": snapshot.env.hours if snapshot.env else None,
+            "apparent_c": snapshot.env.apparent_c if snapshot.env else None,
+            "wet_bulb_c": snapshot.env.wet_bulb_c if snapshot.env else None,
+            "precipitation_mm": snapshot.env.precipitation_mm if snapshot.env else None,
+        }
+        downburst_block = downburst_risk_series(env_dict) if snapshot.env else {"present": False}
+
         report: dict[str, Any] = {
             "district": snapshot.name,
             "date": snapshot.date,
@@ -468,6 +498,14 @@ class AuditAgent:
                 self.district.utc_offset_hours,
                 ground_albedo=eff_albedo,
             ),
+            # M4 — equity, productivity, economy of the heat burden.
+            "analysis": {
+                "equity": equity_block,
+                "productivity": productivity_block,
+                "economy": economy_block,
+            },
+            "thermal_wind": thermal_wind_block,
+            "downburst": downburst_block,
             "provenance": (
                 f"temperature layer: {snapshot.source}; "
                 f"env series: {snapshot.env.source if snapshot.env else 'n/a'}; "
@@ -477,7 +515,10 @@ class AuditAgent:
                 f"level), force-restore storage (thermal admittance), "
                 f"Priestley-Taylor latent cooling (α=1.26), "
                 f"equilibrium solve + sensitivity bands, "
-                f"WBGT = 0.7T_wb+0.2T_g+0.1T_db (globe from solar load); units: °C"
+                f"WBGT = 0.7T_wb+0.2T_g+0.1T_db (globe from solar load); "
+                f"M4: Gini/quintile-gap equity, Dunne 2013 work-capacity curves, "
+                f"thermal-wind proxy (Wallace & Hobbs §7.2.7 Eq. 7.20), "
+                f"downburst wet-bulb-depression diagnostic (Caracena 1990); units: °C"
             ),
             "warnings": snapshot.warnings,
         }

@@ -250,6 +250,23 @@ DISTRICTS: dict[str, District] = {
 }
 
 
+def _mock_precipitation(district: District) -> list[float]:
+    """Mock hourly rain: a mid-afternoon shower for humid districts.
+
+    Humid districts get rain (so the downburst diagnostic has a signal to
+    discriminate), dry desert districts stay dry. The rain falls through
+    *humid* air, so the wet-bulb depression stays small — physically, the
+    diagnostic must return low risk (no dry-microburst signature).
+    """
+    if district.name in ("East Harlem, NYC", "Chicago, IL", "Lower Manhattan, NYC"):
+        return [
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 2.5, 5.0, 3.0, 0.5, 0.0,
+            0.0, 0.0, 0.0, 0.0,
+        ]
+    return [0.0] * 24
+
+
 def get_district(name: str) -> District:
     key = name.strip().lower().replace(" ", "-")
     if key not in DISTRICTS:
@@ -397,7 +414,7 @@ class MockDataSource:
             diffuse_w_m2=diffuse,
             wind_speed_m_s=[round(v, 1) for v in wind],
             cloud_cover_pct=[round(v, 1) for v in cloud],
-            precipitation_mm=[0.0] * 24,
+            precipitation_mm=_mock_precipitation(district),
             heat_index_c=[round(v, 1) for v in heat_index],
             co2_ppm=[round(v, 1) for v in co2],
             source=self.source_name,

@@ -10,18 +10,22 @@ Layout:
     Cover → TOC → Snapshot → Energy attribution (+ charts) → Canyon →
     Inertia (+ diurnal chart) → Exposure → Interventions + retrofit
     ROI (+ ΔT chart) → Vulnerability (+ score donut) → Facade advisor
-    (+ chart) → Theory-vs-data → Provenance & warnings
+    (+ chart) → Equity & cost (+ circulation/productivity/downburst
+    charts) → Theory-vs-data → Provenance & warnings
 
 Figures:
-    A. energy-balance flux bars         D. facade daily-load bars
-    B. cause-attribution donut          E. intervention ΔT bars
-    C. diurnal T/solar twin-axis chart  F. vulnerability component donut
+    A. energy-balance flux bars         F. vulnerability component donut
+    B. cause-attribution donut          G. circulation vector diagram
+    C. diurnal T/solar twin-axis chart  H. WBGT work-capacity curves
+    D. facade daily-load bars           I. downburst depression series
+    E. intervention ΔT bars
 """
 
 from __future__ import annotations
 
 import html
 import io
+import math
 from pathlib import Path
 from typing import Any
 
@@ -274,6 +278,148 @@ def _vulnerability_donut(components: dict[str, Any]) -> Image:
     return _image_from_fig(fig, width=9.5 * cm)
 
 
+def _circulation_diagram(circ: dict[str, Any]) -> Image:
+    """G · the circulation the temperature field implies.
+
+    A small vector diagram: inflow toward the hot core at street level
+    (from the hydrostatic pressure deficit), and the aloft thermal wind
+    running perpendicular to the temperature gradient (Wallace & Hobbs
+    §7.2.7, Eq. 7.20) — warm air on the right (northern hemisphere).
+    """
+    fig, ax = plt.subplots(figsize=(4.6, 3.4))
+    ax.set_xlim(-1.5, 1.5)
+    ax.set_ylim(-1.5, 1.5)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    core = (0.0, 0.0)
+    ax.plot(*core, "o", ms=16, color=_MPL_ACCENT, zorder=3)
+    ax.annotate(
+        "hot core\n(>district mean)",
+        core,
+        xytext=(0.12, 0.12),
+        fontsize=7.5,
+        color=_MPL_NAVY,
+    )
+
+    inflow = circ.get("inflow_direction_deg")
+    tw = math.radians(float(circ.get("thermal_wind_direction_deg", 0.0)))
+    # inflow: from the rim toward the core (opposite of its bearing vector)
+    if inflow is not None:
+        inflow = math.radians(float(inflow))
+        tip = (0.9 * math.sin(inflow), 0.9 * math.cos(inflow))
+        ax.annotate(
+            "",
+            xy=core,
+            xytext=tip,
+            arrowprops=dict(arrowstyle="-|>", color=_MPL_NAVY, lw=2.2),
+        )
+        ax.annotate(
+            f"street inflow  {circ.get('inflow_direction', '')} "
+            f"({circ.get('inflow_direction_deg', '')}°)\n"
+            f"~{circ.get('inflow_speed_scale_m_s', 0.0)} m/s scale",
+            tip,
+            xytext=(0.15, -1.15),
+            fontsize=7.5,
+            color=_MPL_NAVY,
+            ha="left",
+        )
+    else:
+        ax.annotate(
+            "uniform field:\nno net inflow axis",
+            (0.4, -1.0),
+            xytext=(-1.3, -1.0),
+            fontsize=7.5,
+            color="#5a6a7a",
+        )
+    # thermal wind aloft: runs from the diagram edge, perpendicular branch
+    tw_tip = (1.1 * math.sin(tw), 1.1 * math.cos(tw))
+    ax.annotate(
+        "",
+        xy=(0.6 * math.sin(tw), 0.6 * math.cos(tw)),
+        xytext=tw_tip,
+        arrowprops=dict(arrowstyle="-|>", color="#4a7a5a", lw=2.2, ls="--"),
+    )
+    ax.annotate(
+        f"aloft thermal wind {int(circ.get('thermal_wind_direction_deg', 0.0))}°\n"
+        "(W&H Eq. 7.20; warm air to the right, NH)",
+        tw_tip,
+        xytext=(-1.45, 1.05),
+        fontsize=7,
+        color="#4a7a5a",
+    )
+    ax.set_title(
+        "G · Circulation the temperature field implies\n"
+        f"grad {circ.get('gradient_k_per_km', 0.0)} K/km · "
+        f"Δp {circ.get('pressure_deficit_hpa', 0.0)} hPa · "
+        f"{circ.get('ventilation_corridors', 0)} ventilation corridors",
+        fontsize=8.5,
+        color=_MPL_NAVY,
+    )
+    return _image_from_fig(fig, width=12.5 * cm)
+
+
+def _productivity_chart(prod: dict[str, Any]) -> Image:
+    """H · WBGT → work-capacity loss for the three work intensities."""
+
+    def curve(points: list[dict[str, float]]) -> tuple[list[float], list[float]]:
+        return ([p["wbgt_c"] for p in points], [p["loss_pct"] for p in points])
+
+    fig, ax = plt.subplots(figsize=(5.4, 2.6))
+    for i, intensity in enumerate(["light", "moderate", "heavy"]):
+        xs, ys = curve(_curve_points(intensity))
+        ax.plot(xs, ys, color=_PALETTE[i % len(_PALETTE)], lw=1.8, label=intensity.capitalize())
+    wbgt = float(prod.get("wbgt_c", 30.0))
+    ax.axvline(wbgt, color=_MPL_ACCENT, ls="--", lw=1, label=f"district WBGT {wbgt:.1f}°C")
+    ax.set_xlabel("WBGT (°C)", fontsize=8)
+    ax.set_ylabel("Work-capacity loss (%)", fontsize=8)
+    ax.set_title(
+        "H · Labour-capacity loss at district WBGT (Dunne 2013 / Kjellstrom 2009)",
+        fontsize=9,
+        color=_MPL_NAVY,
+    )
+    ax.set_xlim(22, 36)
+    ax.set_ylim(0, 45)
+    ax.tick_params(labelsize=7.5)
+    ax.legend(fontsize=7, loc="upper left")
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    return _image_from_fig(fig)
+
+
+def _downburst_chart(db: dict[str, Any]) -> Image:
+    """I · wet-bulb depression per hour, coloured by risk band."""
+    series = db.get("series", []) or []
+    if not series:
+        return _image_from_fig(plt.figure(figsize=(5.4, 2.2)))
+    hours = [s["hour"] for s in series]
+    dep = [s["depression_k"] for s in series]
+    colors_by_risk = {"low": "#4a7a5a", "medium": "#c2600a", "high": "#a02020"}
+    fig, ax = plt.subplots(figsize=(5.4, 2.4))
+    for s in series:
+        ax.bar(
+            s["hour"],
+            s["depression_k"],
+            width=0.85,
+            color=colors_by_risk.get(s["risk"], "#4a7a5a"),
+            edgecolor="white",
+        )
+    for th in (8.0, 14.0):
+        ax.axhline(th, color=_MPL_NAVY, ls=":", lw=0.8)
+    ax.set_xlabel("Hour (local)", fontsize=8)
+    ax.set_ylabel("Wet-bulb depression (K)", fontsize=8)
+    ax.set_title(
+        "I · Downburst thermodynamic diagnostic (Caracena 1990) — "
+        f"peak {db.get('peak_risk', 'low')}",
+        fontsize=8.5,
+        color=_MPL_NAVY,
+    )
+    ax.tick_params(labelsize=7.5)
+    ax.set_xlim(min(hours) - 0.5, max(hours) + 0.5)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    return _image_from_fig(fig)
+
+
 # ------------------------------------------------------------------ tables
 
 
@@ -307,6 +453,12 @@ def _interventions_pdf(interventions: list[dict[str, Any]]) -> Table:
         )
     )
     return table
+
+
+def _curve_points(intensity: str) -> list[dict[str, float]]:
+    from .analyst.productivity import wbgt_curve_points
+
+    return wbgt_curve_points(intensity)
 
 
 def _fmt(value: Any, suffix: str = "") -> str:
@@ -582,8 +734,125 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(_facade_chart(ranking))
     out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------------ 9 theory vs data
-    out.append(_p("9. Theory vs. data", st["H1"]))
+    # ------------------------------------------------------ 9 equity & cost
+    analysis = report.get("analysis", {}) or {}
+    equity = analysis.get("equity", {}) or {}
+    productivity = analysis.get("productivity", {}) or {}
+    economy = analysis.get("economy", {}) or {}
+    circ = report.get("thermal_wind", {}) or {}
+    db = report.get("downburst", {}) or {}
+    out.append(_p("9. Heat equity, productivity & cost", st["H1"]))
+    if equity.get("present"):
+        out.append(
+            _kv_table(
+                [
+                    ("Gini coefficient of tile temperatures", _fmt(equity.get("gini"))),
+                    (
+                        "Quintile gap (°C): hottest 20% vs coolest 20%",
+                        _fmt(equity.get("quintile_gap_c")),
+                    ),
+                    (
+                        "Tiles above threshold °C",
+                        f'{equity.get("share_above_threshold_pct", "—")}% '
+                        f"(threshold {equity.get('threshold_c', '—')} °C)",
+                    ),
+                    ("Hot-core tiles (within 1 K of max)", f'{equity.get("hot_core_share_pct", "—")}%'),
+                    ("Tile field mean / max (°C)", f'{equity.get("mean_c", "—")} / {equity.get("max_c", "—")}'),
+                ]
+            )
+        )
+        note = equity.get("note")
+        if note:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(note, st["Small"]))
+    if productivity.get("wbgt_c") is not None:
+        out.append(Spacer(1, 0.3 * cm))
+        out.append(
+            _p(
+                f"Labour-capacity loss at district WBGT "
+                f"{productivity.get('wbgt_c', '')} °C — moderate work: "
+                f"{((productivity.get('moderate') or {}).get('loss_pct'))}% "
+                f"({((productivity.get('moderate') or {}).get('usd_per_year'))} USD/yr); "
+                f"heavy work: {((productivity.get('heavy') or {}).get('loss_pct'))}%.",
+                st["Body"],
+            )
+        )
+        out.append(Spacer(1, 0.2 * cm))
+        out.append(_productivity_chart(productivity))
+    if economy.get("total_usd_per_year") is not None:
+        out.append(Spacer(1, 0.3 * cm))
+        out.append(
+            _kv_table(
+                [
+                    ("Cooling energy spend, top intervention (USD/yr)", _fmt(economy.get("cooling_usd_per_year"))),
+                    ("Productivity loss (USD/yr)", _fmt(economy.get("productivity_usd_per_year"))),
+                    ("District cost of heat, both streams (USD/yr)", _fmt(economy.get("total_usd_per_year"))),
+                ]
+            )
+        )
+        assumptions = economy.get("assumptions", {}) or {}
+        if assumptions:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(
+                _p(
+                    "Assumptions returned with the numbers: "
+                    + "; ".join(f"{k}: {v}" for k, v in assumptions.items()),
+                    st["Small"],
+                )
+            )
+    if circ.get("present"):
+        out.append(Spacer(1, 0.4 * cm))
+        out.append(_p("Circulation the temperature field implies", st["H2"]))
+        out.append(
+            _kv_table(
+                [
+                    ("Temperature gradient (K/km)", _fmt(circ.get("gradient_k_per_km"))),
+                    ("Core pressure deficit (hPa)", _fmt(circ.get("pressure_deficit_hpa"))),
+                    ("Core excess above district mean (K)", _fmt(circ.get("core_excess_k"))),
+                    (
+                        "Street inflow (toward core)",
+                        f'{circ.get("inflow_direction", "—")} '
+                        f'({_fmt(circ.get("inflow_direction_deg"))}°)',
+                    ),
+                    ("Inflow speed scale (m/s)", _fmt(circ.get("inflow_speed_scale_m_s"))),
+                    ("Ventilation corridors (cool tiles on inflow axis)", _fmt(circ.get("ventilation_corridors"))),
+                ]
+            )
+        )
+        caveat = circ.get("caveat")
+        if caveat:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(caveat, st["Small"]))
+        out.append(Spacer(1, 0.2 * cm))
+        out.append(_circulation_diagram(circ))
+    if db.get("present"):
+        out.append(Spacer(1, 0.4 * cm))
+        out.append(_p("Downburst thermodynamic diagnostic", st["H2"]))
+        out.append(
+            _kv_table(
+                [
+                    ("Peak wet-bulb depression (K)", _fmt(db.get("peak_depression_k"))),
+                    ("Peak risk hour", _fmt(db.get("peak_hour"))),
+                    ("Peak risk band", db.get("peak_risk", "—")),
+                    ("Hours in medium band", _fmt(db.get("hours_medium"))),
+                    ("Hours in high band", _fmt(db.get("hours_high"))),
+                ]
+            )
+        )
+        advisory = db.get("advisory")
+        caveat = db.get("caveat")
+        if advisory:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(advisory, st["Body"]))
+        if caveat:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(caveat, st["Small"]))
+        out.append(Spacer(1, 0.2 * cm))
+        out.append(_downburst_chart(db))
+    out.append(Spacer(1, 0.4 * cm))
+
+    # ----------------------------------------------------- 10 theory vs data
+    out.append(_p("10. Theory vs. data", st["H1"]))
     out.append(
         _kv_table(
             [
@@ -601,8 +870,8 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(_p(verdict, st["Body"]))
     out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------- 10 provenance & warnings
-    out.append(_p("10. Provenance & warnings", st["H1"]))
+    # ------------------------------------------------ 11 provenance & warnings
+    out.append(_p("11. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:

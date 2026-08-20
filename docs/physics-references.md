@@ -133,12 +133,73 @@ maps onto it. The four source texts live locally in `Resources/`
   statistics) are not used.
 - Oke, Mills, Christen & Voogt 2017, *Urban Climates*, Cambridge Univ.
   Press — canyon geometry (§5.2), urban energy balance (§5.4), LCZ
-  fabric properties (Table 2.2).
+  fabric properties (Table 2.2), UHI circulation scale (Ch. 4).
 - Campbell & Norman 1998, *Introduction to Environmental Biophysics*,
   2nd ed., Springer — Ch. 8 (soil heat, admittance), Ch. 10 (sky
   emissivity), Ch. 11 (radiation geometry).
 - Monteith & Unsworth 2014, *Principles of Environmental Physics*, 4th
   ed., Academic Press — Ch. 13 (evaporation, Priestley–Taylor).
+
+## M4 — analyst, circulation & downburst (shipped 2026-08-20, 140 tests total)
+
+### M4a — Heat equity (`calorai/analyst/equity.py`)
+- Gini coefficient on the tile temperature distribution (standard
+  definition, computed from the sorted distribution) + quintile gap
+  (hottest 20% minus coolest 20%, K) + exposure share above threshold.
+- Why it matters: Hsu et al. 2021, *Nature* 598, "Disproportionate
+  exposure to urban heat island intensity across major US cities" —
+  169 of 175 cities burden low-income / non-white neighbourhoods more;
+  Climate Central 2024 UHI exposure analysis (NYC highest per-capita
+  UHI at 9.7 °F, 7.27 M residents / 83% exposed). Our mock flagships
+  (Maryvale PHX, East Harlem NYC) are redlined / equity-contrast AOIs.
+
+### M4b — Productivity (`calorai/analyst/productivity.py`)
+- Work-capacity loss vs WBGT via an S-shaped curve per work intensity
+  (light/moderate/heavy): parameterization of the physiological curves
+  of Dunne et al. 2013, *Nature Climate Change* 3, "Reductions in
+  labour capacity from heat stress under climate warming", and
+  Kjellstrom et al. 2009, *Glob. Health Action* 2 — near-full capacity
+  below ~28–29 °C WBGT, steep transition, intensity-dependent
+  saturation (10/25/40 %). Assumptions (workers, hours, hot days,
+  wage) are returned with the USD figures, never hidden.
+
+### M4c — Economy (`calorai/analyst/economy.py`)
+- District cost of heat = cooling-energy spend (the top intervention's
+  avoided kWh valued at the ROI module's implicit price) + labour-
+  productivity loss (M4b at the district WBGT). Bottom-up from audited
+  physics; health costs explicitly excluded (documented).
+
+### M4d — Thermal-wind proxy (`calorai/physics/thermal_wind.py`)
+- **Hydrostatic pressure perturbation** of a warm column: dp/p ≈
+  g·H·dT/(R·T²) over a 1 km mixed layer (Wallace & Hobbs 2006,
+  *Atmospheric Science*, 2nd ed., Ch. 3 hypsometric equation; Eq. 3.29
+  family). Phoenix-scale check: ΔT = 4 K over 1 km → ~1.4 hPa surface
+  deficit — matches the published UHI pressure deficit scale.
+- **Thermal wind** V_T = (R/f)·ln(p₁/p₂)·(k × ∇T̄) — Wallace & Hobbs
+  §7.2.7, Eq. 7.20: vertical shear ∝ horizontal temperature gradient;
+  aloft flow parallel to isotherms, warm air on the right (NH). Used
+  for the upper-branch direction only.
+- **Urban-breeze inflow** toward the low-pressure core (Oke et al.
+  2017 Ch. 4 UHI circulation; ~1–3 m/s for 4–8 K core excess — speed
+  scale 0.4 m/s per K, documented).
+- Honesty contract: *relative* circulation from the temperature field
+  alone; the API ships no wind (P2-4 in docs/fortyguard-products.md),
+  so magnitudes are scale estimates, not a momentum solve. The report
+  states this caveat verbatim. Gradient via a robust least-squares
+  plane over (lon, lat, T) with a 1-D collinear fallback (single street
+  rows still yield a direction).
+
+### M4e — Downburst diagnostic (`calorai/physics/downburst.py`)
+- Wet-bulb depression D = T_app − T_wb per hour; bands from Caracena
+  1990, "Downbursts: meteorological conditions associated with their
+  generation" (AMS *Meteorological Monographs* 25; dry microbursts
+  need D ≳ 12–15 K below cloud base) and Wakimoto 1985 (composite
+  microburst life cycle) — implemented as a documented parameterization:
+  no rain in the trailing 3 h → low; rain & D < 8 K → low; 8–14 K →
+  medium; ≥ 14 K → high.
+- Diagnostic, not forecast: the env series is the district meso-scale
+  environment, not a storm-scale sounding; apparent temperature proxies
+  dry-bulb. Both caveats ship in the report block.
 
 ## Verification of experimental-vs-theory agreement
 1. ψ_sky(H/W=0.5) = 0.618 exactly matches √(1.25) − 0.5 (Oke Fig. 5.10).
@@ -149,3 +210,13 @@ maps onto it. The four source texts live locally in `Resources/`
    reproduces the explicit energy-balance zero to <1e-6.
 5. Priestley–Taylor flux never exceeds the available energy
    (α·s/(s+γ) ≤ 1 at T ≤ ~31 °C) — the book's bound.
+6. Thermal-wind scale sanity: ΔT = 4 K over a 1 km column → ~1.4 hPa
+   (mock Maryvale: 5.5 K core excess → 1.6 hPa deficit) — within the
+   published UHI pressure-deficit range; inflow direction always points
+   at the fitted hot core (unit-tested, incl. collinear single-row
+   fallback); thermal-wind bearing ⊥ gradient with warm air on the
+   right (NH) — verified against W&H §7.2.7 Fig. 7.15 geometry.
+7. Downburst discrimination (unit-tested): rain through dry air
+   (D = 18 K) → high; rain through humid air (D = 3 K) → low; dry with
+   no rain → low. Mock east-harlem shower (D ≈ 2.5 K) correctly stays
+   low — rain alone is not a microburst signature.

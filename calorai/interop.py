@@ -84,6 +84,11 @@ def audit_table_csv(report: dict[str, Any]) -> str:
     roi = report.get("retrofit_roi", {})
     vuln = report.get("vulnerability", {})
     facade = report.get("facade", {})
+    analysis = report.get("analysis", {}) or {}
+    equity = analysis.get("equity", {}) or {}
+    productivity = analysis.get("productivity", {}) or {}
+    economy = analysis.get("economy", {}) or {}
+    circ = report.get("thermal_wind", {}) or {}
     hot_tile = snap.get("hottest_tile", {})
     row = {
         "district": report.get("district", ""),
@@ -111,6 +116,19 @@ def audit_table_csv(report: dict[str, Any]) -> str:
         "roi_payback_years": roi.get("payback_years", ""),
         "facade_hottest": facade.get("hottest", ""),
         "facade_coolest": facade.get("coolest", ""),
+        "equity_gini": equity.get("gini", ""),
+        "equity_quintile_gap_c": equity.get("quintile_gap_c", ""),
+        "equity_share_above_threshold_pct": equity.get("share_above_threshold_pct", ""),
+        "productivity_loss_pct": (productivity.get("moderate") or {}).get("loss_pct", ""),
+        "productivity_usd_per_year": (productivity.get("moderate") or {}).get("usd_per_year", ""),
+        "economy_cooling_usd_per_year": economy.get("cooling_usd_per_year", ""),
+        "economy_productivity_usd_per_year": economy.get("productivity_usd_per_year", ""),
+        "economy_total_usd_per_year": economy.get("total_usd_per_year", ""),
+        "thermal_gradient_k_per_km": circ.get("gradient_k_per_km", ""),
+        "thermal_pressure_deficit_hpa": circ.get("pressure_deficit_hpa", ""),
+        "thermal_inflow_direction": circ.get("inflow_direction", ""),
+        "thermal_inflow_speed_scale_m_s": circ.get("inflow_speed_scale_m_s", ""),
+        "thermal_ventilation_corridors": circ.get("ventilation_corridors", ""),
     }
     return _csv_string([row])
 

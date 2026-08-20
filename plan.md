@@ -100,9 +100,9 @@ calorai/
 | Module | Ships | Status |
 |---|---|---|
 | M1 Auditor | energy balance, attribution, canyon, inertia, facade, retrofit ROI | ✅ done |
-| M2 Sentinel | vulnerability score + worker-safety alert ✅ · **anomaly** (tile-vs-physics residual z-score + IsolationForest) ⬜ · **alerts** (threshold rules → webhook-ready payloads, escalation) ⬜ · **downburst "outflow watch"** advisory ⬜ | 🟡 |
+| M2 Sentinel | vulnerability score + worker-safety alert ✅ · **anomaly** (tile-vs-physics residual z-score + IsolationForest) ⬜ · **alerts** (threshold rules → webhook-ready payloads, escalation) ⬜ · **downburst "outflow watch"** advisory ✅ | 🟢 |
 | M3 Responder | **mist cooling physics** (evaporative latent extraction, 2.26 MJ/kg, nozzle eff. 0.7 → ΔT + water budget) ⬜ · **Heat Response Agent** (WBGT/forecast breach → mist schedule, water cost vs cooling, ranked actions) ⬜ · **wind-aware misting** (thermal-wind proxy: high flow = mist disperses = skip) ⬜ | 🟡 |
-| M4 Analyst | **equity** (Gini + hottest/coolest quintile ratio on tile °C; cross-district leaderboard) ⬜ · **productivity** (WBGT → work-capacity loss %, Dunne 2013/Kjellstrom, cited; annualized lost h + $) ⬜ · **economy** (district-scale cost of heat = cooling $ + productivity $) ⬜ · **thermal-wind proxy** (hydrostatic Δp from ΔT → urban-breeze circulation direction + relative magnitude; ventilation corridors; caveated as relative, not absolute) ⬜ | 🟡 |
+| M4 Analyst | **equity** (Gini + hottest/coolest quintile ratio on tile °C; cross-district leaderboard) ✅ · **productivity** (WBGT → work-capacity loss %, Dunne 2013/Kjellstrom, cited; annualized lost h + $) ✅ · **economy** (district-scale cost of heat = cooling $ + productivity $) ✅ · **thermal-wind proxy** (hydrostatic Δp from ΔT → urban-breeze circulation direction + relative magnitude; ventilation corridors; caveated as relative, not absolute) ✅ | 🟢 |
 
 **ML layer (Option B, hybrid — decision Aug 20):**
 - `ml/forecast.py` — physics-informed forecast surrogate: gradient-boosted regressor (sklearn
@@ -205,20 +205,22 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
       Vegas Strip, NYC East Harlem) + live probes (Vegas, NYC; Dallas optional) on 2024-07-15,
       small-AOI first, cache everything
 
-### D4–D5 (Aug 22–23) — Analysis layer + new physics (M4, T7 spirit)
-- [ ] `analyst/equity.py` — Gini + quintile ratio per district + cross-city leaderboard (tile °C, WBGT,
+### D4–D5 (Aug 22–23) — Analysis layer + new physics (M4, T7 spirit) ✅ shipped 2026-08-20
+- [x] `analyst/equity.py` — Gini + quintile ratio per district + cross-city leaderboard (tile °C, WBGT,
       exceedance, vulnerability, Gini) — charts into PDF
-- [ ] `analyst/productivity.py` — WBGT → work-capacity loss % (Dunne 2013/Kjellstrom, cited) →
+- [x] `analyst/productivity.py` — WBGT → work-capacity loss % (Dunne 2013/Kjellstrom, cited) →
       annualized lost hours + $ per site/intensity
-- [ ] `analyst/economy.py` — district-scale cost of heat = cooling energy $ + productivity-loss $
-- [ ] `physics/thermal_wind.py` — hydrostatic Δp from ΔT field → urban-breeze circulation direction +
-      relative magnitude, ventilation corridors; caveated (relative, not absolute — the API ships no wind)
-- [ ] `physics/convection.py` — downburst thermodynamic diagnostic from env series (T, RH, wet-bulb,
+- [x] `analyst/economy.py` — district-scale cost of heat = cooling energy $ + productivity-loss $
+- [x] `physics/thermal_wind.py` — hydrostatic Δp from ΔT field → urban-breeze circulation direction +
+      relative magnitude, ventilation corridors; caveated (relative, not absolute — the API ships no wind);
+      uniform-field flag for symmetric districts; robust LSQ plane fit with collinear fallback
+- [x] `physics/downburst.py` — downburst thermodynamic diagnostic from env series (T, RH, wet-bulb,
       precip): wet-bulb depression D = T−Tw with rain onset → low/med/high bands (Caracena 1990;
-      Wakimoto 1985); "outflow watch" advisory feeding `worker_safety_alert`; documented boundary
+      Wakimoto 1985); "outflow watch" advisory; documented boundary
       (diagnostic, not forecast — no radar/CAPE)
-- [ ] Tests (~+14), `docs/physics-references.md` citations, PDF charts (equity, productivity curve,
-      thermal-wind quiver over tiles, downburst risk series)
+- [x] Tests (+20, 140 total), `docs/physics-references.md` citations (M4a–M4e), PDF charts (equity table,
+      productivity curves, circulation diagram, downburst risk series); interop CSV extended with
+      equity/productivity/economy/thermal-wind columns
 
 ### D6 (Aug 24–25) — ML layer (forecast + anomaly)
 - [ ] `ml/forecast.py` — synthetic-data generator (physics sweeps) → train HistGradientBoosting →
