@@ -75,6 +75,58 @@ Prizes: top-3 teams each win an Nvidia GPU; plus incubation, internships, API di
       `CONTRIBUTIONS.md` (findings + 8 recommendations + usage footprint)
 - [x] Git: everything committed + pushed to GitHub (`4a5f48d` + 4 prior commits); repo public-ready
 
+### 2.6 D8 shipped (2026-08-20) — stats layer, trajectories, UI rebuild, voice, personal
+
+- [x] **Statistics module** (`analyst/statistics.py`, `a05e5b5`): percentiles/IQR/outliers (Tukey),
+      Shapiro–Wilk normality (deterministic stride cap + constant-field guard), radial UHI profile,
+      24-h apparent shift, report section "10. Tile distribution & normality" + charts J/K/L (+17 tests)
+- [x] **N2 gradient-line trajectories** (`physics/thermal_wind.py`, `a05e5b5`): IDW square-cell mesh,
+      Gaussian-smoothed gradient (σ=1.6), RK4 direction-only tracer with chord-scan + clamped-boundary +
+      peak-crossing core detection; cool-rim starts by bearing; terminations
+      `reached core / stalled / exited bounds / steps exhausted`; chart G v2 (+12 tests)
+- [x] **UI rebuild in PQ design language** (`02ffa6d`): 4-act vanilla dashboard (Overview / Physics /
+      Analytics / Ask) — navy glass, serif display, cyan/amber accents, starfield, pills, dark/light,
+      fade-up; canvas charting, no CDN; `GET /api/analysis` curated payload
+      (`MAX_UI_TILES=900` stride-subsample; mock 81 / live 2,891 tiles); StaticFiles `/ui` mount
+- [x] **Voice agent**: Web Speech API mic → `/api/ask` → SpeechSynthesis TTS on `answer_tldr`
+      (spoken one-liner with profile units)
+- [x] **Personal intelligence** (`personal.py`): units °C/°F, work intensity (moderate/heavy), threshold,
+      home district; NLP context — pronoun resolution (`_FOLLOWUP_RE`), difflib fuzzy district match;
+      tool results now self-identify their district (audit trail); +19 tests
+- [x] Suite **225 green**; uvicorn smoke: page + assets + payload all 200
+- [x] **D9 validation script** (`scripts/validate_live.py`): 24-h audits × 2 districts (phoenix,
+      san-jose, pinned 2024-07-15, `with_exceedance=False`, heatmap-per-hour pulls all cached —
+      cache 23→46 files) → surrogate vs closed-form physics vs real API tile max/mean + layer offset;
+      **run crashed before writing JSON (silent exit) — re-run on 2026-08-21, ~zero new credits**
+- [x] Live credits now **111,180 / 2,000,000 (5.6%)**, reset Sep 22
+
+### 2.7 N5 — street-level evidence + synoptic risk (approved Aug 20, not started)
+
+- **N5-a Street-level evidence (satellite + street view)** — the organizers' demo capability,
+  confirmed in `fortyguard/client.py:299` (`POST /v1/streetview` + `/v1/satellite`, Premium).
+  Cached responses already in `data/` (diridon + 3 portfolio parcels; e.g. diridon street view:
+  building 7.7% / sky 39.7% / tree 6.5% / road 43.1%; satellite: building/tree/earth/plant).
+  - `analyst/landcover.py`: parse segmentations → `svf` (sky%), `shade_pct`, `green_pct`,
+    `impervious_pct`, parcel coords, `image_date`
+  - **Physics hookup**: SVF modulates `radiative_environment_c`, tree% modulates effective irradiance
+    (shade) in `EquilibriumInputs` → theory-vs-data becomes landcover-aware ("why this block is hot")
+  - Tool `landcover` + sentinel rule R10 + report section + UI **Evidence panel** (Act 4: segmented
+    image + fraction bars vs district mean)
+  - Data: cached diridon/portfolio first; **+2 live pulls** (1 street view + 1 satellite, new parcel
+    ~Phoenix district center, Premium cost logged); mock tests use cached files
+- **N5-b Synoptic risk block** (`analyst/synoptic.py`, zero new credits — from the 24-h env series):
+  - Heat-wave day: apparent ≥ threshold ≥3 consecutive h + WBGT ≥ 26 °C
+  - **Omega-block / heat-dome signature**: cloud ≤3 octas + solar above district median + apparent
+    above threshold (subsidence heuristic; honest single-day caveat — API ships no wind, no multi-day)
+  - Fire weather: VPD from RH + air temp, simplified index (wind = *derived* thermal-wind inflow,
+    documented relative proxy) → low/moderate/high bands
+  - Sentinel alerts **R8 heat-wave watch, R9 fire-weather watch**; report section + chart M
+    (VPD + cloud octas diurnal); tests `tests/test_synoptic.py`
+- **N5-c Elevation correction**: env params include `elevation` → lapse-rate 6.5 K/km correction on
+  air temperature, propagated through exposure/theory_vs_data; full landform analysis out of scope
+  (no DEM in API) — documented honestly
+- Sequencing: N5-a → N5-b → N5-c (tests green per step) → D9 re-run → C2 deploy (user) → D10
+
 ### 2.1 Q&A intel (Aug 19) — mandatory web demo + judging guidance
 
 - **Web-based demo is mandatory, not optional.** URL must work in a **fresh/incognito window, no install**.
@@ -260,6 +312,10 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
 - [ ] Full suite green (~150 tests); incognito re-verify; mock-mode full pass
 
 ### D9 (Aug 29) — Video + summary + submit
+- [ ] **Validation re-run (2026-08-21)**: `scripts/validate_live.py` — cache already holds the 24-h
+      pulls (phoenix + san-jose, 2024-07-15); fix silent-crash (explicit flush/logging), write
+      `data/validation_live.json`, mirror real MAE + layer offset into `docs/ml-validation.md` Stage 2
+- [ ] PDF v2 (stats charts J/K/L + N5 landcover + synoptic sections)
 - [ ] Video ≤3 min: problem → user → FYG endpoints → measured results (−13.0 °C, ROI $, 84/100 risk,
       equity Gini, productivity %) → **centerpiece: "should we mist?" → agent thinks (forecast + anomaly
       + thermal wind) → acts (schedule + water cost) → trace shown**
@@ -278,11 +334,12 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
 | Use | Est. cost | Done |
 |---|---|---|
 | Probes + failed experiments (irrecoverable) | ~26k | ✅ |
-| Probes/experiments to date (heatmaps 38.0k + env 31.9k + premium 8.6k) | ~78.5k total | ✅ |
+| Probes/experiments to date (heatmaps + env + premium + live pulls) | ~111.2k total (5.6%) | ✅ |
 | Live locations: Las Vegas + Manhattan/NYC (+ Dallas optional) | ~9–13.5k | ⬜ |
-| Forecast validation pull (held-out live 24-h series) | ~4.5k | ⬜ |
+| Forecast validation pull (24-h series × 2 districts) — **pulled 2026-08-20, all cached** | ~4.5k | ✅ |
+| N5-a live street-view + satellite (1–2 parcels, Premium) | ~2–6k | ⬜ |
 | Bus-stop shade + misc demo headroom | ~3k | ⬜ |
-| **Total projected** | **~95–100k (≈5%)** | |
+| **Total projected** | **~130–140k (≈7%)** | |
 
 Discipline rules: cache every layer by area+date/time; no scope creep on live calls; failed tasks are
 free — retry liberally; **verify coverage (small-AOI probe) before any new AOI/date**; demo cached so
@@ -295,7 +352,7 @@ server-side cost stays ~0 after first run.
 | Risk | Mitigation |
 |---|---|
 | Today's date returns zero cells (catalog lag) | All demos pinned to catalog-proven dates (2024-07-15); probe before pulling new AOIs |
-| Premium endpoints — **RESOLVED 2026-08-19** | heat_intelligence probe succeeded (27-page PDF); satellite/street-view stay low priority |
+| Premium endpoints — **RESOLVED 2026-08-19** | heat_intelligence probe succeeded (27-page PDF); satellite/street-view now used by N5-a (cached demo data first, 2 live pulls credit-gated) |
 | Scope creep (12 use cases + 4 modules + ML + NL) | Ship set locked (U1/U2/U3/U10); everything else fold-in or presumptive; video/summary can only carry 4 acts |
 | LLM narrator/planner keys unavailable at judging | Cascade + keyword-intent fallback → demo fully works with zero keys (incognito-safe) |
 | ML honesty (synthetic training data) | Held-out real API validation with MAE/RMSE vs physics baseline published in docs + report; no overclaiming |
