@@ -231,18 +231,25 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
       explanation; feeds U8 + report block
 - [x] `requirements.txt` += `scikit-learn`, `joblib`; tests (+7, 147 total); docs section (docs/ml-validation.md)
 
-### D7 (Aug 26–27) — NL agent loop + Heat Response Agent (Track 6 heart)
-- [ ] `tools.py` registry (uniform schema) with all 10 tools incl. `respond_mist`, `export`, `usage`
-- [ ] `planner.py` — LLM tool-selection loop (GitHub Models cascade) + **keyword-intent fallback** +
-      auditable trace `{tool, args, status, credits, ms}`; max 6 calls; numbers only from tools
-- [ ] `POST /api/ask` + UI chat box + CLI `python -m calorai ask "…"`; trace rendered in UI
-- [ ] `responder/misting.py` — evaporative mist physics (latent 2.26 MJ/kg, nozzle eff. 0.7) →
-      ΔT + water budget (L/m²·h); **wind-aware** via thermal-wind proxy (calm = mist, flow = skip)
-- [ ] `responder/heat_response.py` — Heat Response Agent: breach (WBGT + forecast) → mist schedule,
-      water cost vs cooling, ranked actions; U10 water-budget comparison (mist vs shade vs roof per °C per $)
-- [ ] `sentinel/alerts.py` + anomaly packaging — threshold rules → webhook-ready payloads, escalation,
-      outflow watch; U4/U5/U11 folded in
-- [ ] Tests (~+15); notebook v2 (NL brief → trace → PDF)
+### D7 (Aug 21–22, pulled forward) — NL agent loop + Heat Response Agent (Track 6 heart) — C1 shipped 2026-08-20
+- [x] `tools.py` registry (uniform schema) — 13 tools: audit, forecast, anomaly, risk, respond_mist,
+      equity, productivity, economy, thermal_wind, downburst, aviation (N4 early), export, usage;
+      memoized report per (district, date, hour, threshold, source) so chains run the audit once
+- [x] `planner.py` — keyword-intent matcher (chains: plan/schedule/inspect/compare/export) +
+      best-effort GitHub-Models refinement (never blocks; offline → deterministic plan) + auditable
+      trace `{tool, args, status, summary, ms}`; deterministic markdown answer (no model required)
+- [x] `POST /api/ask` + UI chat box with trace table; sentinel alerts block in every report
+- [x] `responder/misting.py` — evaporative mist physics (latent 2.45 MJ/kg), humidity-limited
+      efficiency × wet-bulb depression, **wind-aware** placement on the thermal-wind inflow axis,
+      drift pause above 4 m/s, water/energy budget + assumptions
+- [x] `responder/heat_response.py` — Heat Response Agent: WBGT band → ordered actions (OSHA ladder)
+- [x] `sentinel/alerts.py` — R1–R7 threshold rules over the report → webhook-ready payloads + severity
+      ordering (tile_max, wbgt, exceedance, retention, downburst, anomaly, equity gap)
+- [x] Tests (+30 in `tests/test_agentic.py`); suite 177 green; `tests/conftest.py` forces mock so the
+      suite is offline & zero-credit (discovered suite was burning live credits via .env key)
+- [x] Aviation module (N4 early, `analyst/aviation.py`) — DA = PA + 120·(OAT−ISA) ft (FAA-H-8083-25B),
+      takeoff factor ~11%/kft, weight-restriction hint vs runway, tarmac/tire risk bands (AC 150/5370)
+- [ ] CLI `python -m calorai ask "…"`; notebook v2 (NL brief → trace → PDF); D9 keepalive re-check
 
 ### D8 (Aug 28) — Unified deliverable
 - [ ] **Tabbed 4-act UI** — Act 1 retrofit ROI → Act 2 shade/bus-stop ranking → Act 3 risk/safety →

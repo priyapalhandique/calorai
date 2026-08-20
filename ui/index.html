@@ -16,8 +16,15 @@
   .container { display:grid; grid-template-columns:320px 1fr; gap:18px; padding:18px 24px; align-items:start; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
   label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
-  input,select { width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line);
-                 background:#0d1526; color:var(--text); font-size:14px; }
+  input,select,textarea { width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line);
+                 background:#0d1526; color:var(--text); font-size:14px; font-family:inherit; }
+  textarea { resize:vertical; min-height:64px; }
+  #askbtn { margin-top:8px; background:linear-gradient(90deg,#4cd98d,#3fb6d8); color:#0a1410; }
+  details.trace { margin-top:10px; font-size:12px; color:var(--muted); }
+  details.trace summary { cursor:pointer; color:var(--cool); }
+  details.trace table { width:100%; font-size:12px; margin-top:6px; }
+  details.trace td { padding:2px 6px; border-bottom:1px solid var(--line); }
+  .ok { color:var(--ok); } .err { color:var(--hot); }
   button { margin-top:16px; width:100%; padding:10px; border:0; border-radius:8px;
            background:linear-gradient(90deg,#ff8c42,#ffb454); color:#14100a; font-weight:700;
            font-size:14px; cursor:pointer; }
@@ -50,6 +57,9 @@
 </header>
 <div class="container">
   <aside class="panel">
+    <label for="ask">Ask the agent</label>
+    <textarea id="ask" placeholder="e.g. plan tomorrow for Maryvale — misting, worker risk, wind, cost"></textarea>
+    <button id="askbtn">Ask</button>
     <label for="district">District</label>
     <select id="district"></select>
     <label for="date">Date (catalog 2021–today, US coverage)</label>
@@ -119,6 +129,37 @@ $("run").onclick = async () => {
     $("status").textContent = `source: ${data.source} · ${data.pipeline}`;
     $("pdf").disabled = false;
     $("export").disabled = false;
+  } catch (e) {
+    $("report").innerHTML = `<h2>Network error</h2><p>${md(String(e))}</p>`;
+  } finally { btn.disabled = false; }
+};
+$("askbtn").onclick = async () => {
+  const q = $("ask").value.trim();
+  if (!q) return;
+  const btn = $("askbtn"); btn.disabled = true;
+  $("report").innerHTML = '<span class="spinner"></span> planning…';
+  try {
+    const res = await fetch("/api/ask", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        query: q,
+        district: $("district").value,
+        date: $("date").value,
+        hour: +$("hour").value,
+        threshold_c: +$("threshold").value,
+        source: $("source").value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { $("report").innerHTML = `<h2>Error</h2><p>${md(data.detail||"failed")}</p>`; return; }
+    const rows = data.trace.map(t =>
+      `<tr><td>${md(t.tool)}</td><td class="${t.ok?"ok":"err"}">${t.ok?"ok":"fail"}</td>` +
+      `<td>${md(String(t.summary||""))}</td><td>${t.duration_ms}ms</td></tr>`).join("");
+    $("report").innerHTML = md(data.answer) +
+      `<details class="trace"><summary>trace · mode ${md(data.mode)} · refinement ${md(data.refinement||"n/a")} · ${data.duration_ms}ms</summary>` +
+      `<table><tr><th>tool</th><th>status</th><th>summary</th><th>ms</th></tr>${rows}</table></details>`;
+    $("status").textContent = `agent answered in ${data.duration_ms}ms`;
   } catch (e) {
     $("report").innerHTML = `<h2>Network error</h2><p>${md(String(e))}</p>`;
   } finally { btn.disabled = false; }

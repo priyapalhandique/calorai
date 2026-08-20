@@ -6,6 +6,7 @@ GET  /                  single-page audit UI
 GET  /api/health        source mode + credit diagnostics
 GET  /api/districts     district catalog
 POST /api/audit         run a full district heat-budget audit
+POST /api/ask           agentic natural-language query (D7)
 """
 
 from __future__ import annotations
@@ -97,6 +98,31 @@ def audit(body: AuditBody) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     report = agent.run(narrate=body.narration != "none")
     return report
+
+
+class AskBody(BaseModel):
+    query: str = Field(..., min_length=3, description="natural-language request")
+    district: str | None = Field(None, description="default district if the query names none")
+    date: str | None = Field(None, description="default date if the query names none")
+    hour: int | None = Field(None, ge=0, le=23, description="default audit hour")
+    threshold_c: float | None = Field(None, description="exceedance threshold °C")
+    source: str | None = Field(None, description="auto | mock | live")
+
+
+@app.post("/api/ask")
+def ask(body: AskBody) -> dict[str, Any]:
+    """Agentic endpoint (D7): plan -> tools -> trace -> answer."""
+    from .planner import plan_and_run
+    from .tools import AgentContext
+
+    ctx = AgentContext(
+        district=body.district or "phoenix",
+        date=body.date or "2026-08-18",
+        hour=body.hour if body.hour is not None else 14,
+        threshold_c=body.threshold_c if body.threshold_c is not None else 30.0,
+        source=body.source,
+    )
+    return plan_and_run(body.query, ctx)
 
 
 @app.get("/api/report")

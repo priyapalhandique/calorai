@@ -33,6 +33,8 @@ from .analyst import annualized_loss, district_cost_of_heat, heat_burden
 from .data_source import District, get_district, resolve_source
 from .ml.anomaly import detect_anomalies
 from .narrator import make_narrator
+from .responder import heat_response_plan, misting_plan
+from .sentinel import evaluate_alerts
 from .physics import (
     EquilibriumInputs,
     MATERIALS,
@@ -234,6 +236,7 @@ class AuditAgent:
             wind_speed_m_s=wind,
         )
         exposure["exceedance_hours"] = round(exceedance_hrs, 2)
+        exposure["exceedance_available"] = excess is not None
         if humidity_pct > 0.0:
             exposure["humidex_c"] = round(humidex(air_c, humidity_pct), 1)
 
@@ -510,6 +513,18 @@ class AuditAgent:
             },
             "thermal_wind": thermal_wind_block,
             "downburst": downburst_block,
+            # M3 (D7) — the responder's plan for this exact district/hour.
+            "response": {
+                "misting": misting_plan(
+                    wbgt_c=float(exposure["wbgt_c"]),
+                    humidity_pct=float(humidity_pct),
+                    wind_speed_m_s=float(wind),
+                    air_temp_c=float(air_c),
+                    inflow_direction_deg=thermal_wind_block.get("inflow_direction_deg"),
+                    inflow_speed_scale_m_s=thermal_wind_block.get("inflow_speed_scale_m_s", 0.0),
+                ),
+                "heat_response": heat_response_plan(wbgt_c=float(exposure["wbgt_c"])),
+            },
             "provenance": (
                 f"temperature layer: {snapshot.source}; "
                 f"env series: {snapshot.env.source if snapshot.env else 'n/a'}; "
@@ -527,6 +542,8 @@ class AuditAgent:
             ),
             "warnings": snapshot.warnings,
         }
+        # Sentinel (D7) — threshold rules over the finished report.
+        report["alerts"] = evaluate_alerts(report)
         if narrate:
             report["narrative"] = self.narrator.narrate(report)
         return report

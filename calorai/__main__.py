@@ -38,6 +38,17 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("serve", help="run the FastAPI web app on :8000")
 
+    ask = sub.add_parser(
+        "ask",
+        help="ask the agent a natural-language question (D7)",
+    )
+    ask.add_argument("query", help="natural-language request, e.g. \"plan tomorrow for Maryvale\"")
+    ask.add_argument("--district", default="phoenix", help="default district if the query names none")
+    ask.add_argument("--date", default="2026-08-18", help="default date if the query names none")
+    ask.add_argument("--hour", type=int, default=14, help="default audit hour")
+    ask.add_argument("--mock", action="store_true", help="force offline mock data")
+    ask.add_argument("--json", action="store_true", help="emit the full plan+trace payload")
+
     train = sub.add_parser(
         "train-forecast",
         help="train the physics-informed forecast surrogate (ML, D6)",
@@ -51,6 +62,29 @@ def main(argv: list[str] | None = None) -> int:
         import uvicorn
 
         uvicorn.run("calorai.main:app", host="127.0.0.1", port=8000)
+        return 0
+
+    if args.command == "ask":
+        from .planner import plan_and_run
+        from .tools import AgentContext
+
+        out = plan_and_run(
+            args.query,
+            AgentContext(
+                district=args.district,
+                date=args.date,
+                hour=args.hour,
+                source="mock" if args.mock else None,
+            ),
+        )
+        if args.json:
+            print(json.dumps(out, indent=2, default=str))
+        else:
+            print(out["answer"])
+            print(
+                f"\n[mode {out['mode']} · refinement {out['refinement']} · "
+                f"{len(out['trace'])} tool(s) · {out['duration_ms']} ms]"
+            )
         return 0
 
     if args.command == "train-forecast":

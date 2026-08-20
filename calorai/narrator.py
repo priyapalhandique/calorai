@@ -192,6 +192,40 @@ class GitHubModelsNarrator:
         except Exception:
             return self._fallback.narrate(report)
 
+    def chat(
+        self,
+        prompt: str,
+        system: str | None = None,
+        max_tokens: int = 800,
+        temperature: float = 0.0,
+    ) -> str:
+        """Generic chat completion (used by the planner). Raises on any
+        failure so callers can fall back deterministically."""
+        if not self._token:
+            raise RuntimeError("no GitHub Models token configured")
+        import requests
+
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        payload = {
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        resp = requests.post(
+            f"{self.BASE_URL}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self._token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+
     def _call(self, report: dict) -> str:
         import requests
 
