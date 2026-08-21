@@ -263,6 +263,10 @@ data/bus_stops/*
 data/terrain/*
 !data/terrain/*.json
 
+!data/citizen/
+data/citizen/*
+!data/citizen/*.json
+
 # ...and one more deliberate exception: the committed ML artifact
 # (physics-informed forecast surrogate). Shipping it makes the demo
 # deterministic on a fresh clone / Render — zero training, zero credits.

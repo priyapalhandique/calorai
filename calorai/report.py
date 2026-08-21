@@ -1110,8 +1110,52 @@ def _story(report: dict[str, Any]) -> list[Any]:
         if caveat: out.append(_p(caveat, st["Small"]))
         out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------ 18 provenance & warnings
-    out.append(_p("18. Provenance & warnings", st["H1"]))
+    # ------------------------------------------------ 18 Heat Time-Machine
+    tm = report.get("time_machine", {}) or {}
+    if tm.get("present"):
+        out.append(_p("18. Heat Time-Machine — past / present / future / what-if", st["H1"]))
+        out.append(_kv_table([
+            ("Past max (2024-07-15 live)", tm.get("past", {}).get("max_c", "—")),
+            ("Present max (mock)", tm.get("present_block", {}).get("max_c", "—")),
+            ("Future peak (forecast)", tm.get("future", {}).get("peak_skin_c", "—")),
+            ("What-if cool roof ΔT", tm.get("whatif", {}).get("albedo_0_5_delta_c", "—")),
+        ]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 19 Community Resilience OS
+    res = report.get("resilience", {}) or {}
+    if res.get("present"):
+        out.append(_p("19. Community Resilience OS — 0-100", st["H1"]))
+        out.append(_kv_table([
+            ("Score / band", f'{res.get("score", "—")}/100 — {res.get("band", "")}'),
+            ("Top actions", ", ".join(res.get("ranked_actions", [])[:3])),
+        ]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 20 Carbon & Grid Twin
+    carb = report.get("carbon", {}) or {}
+    if carb.get("present"):
+        out.append(_p("20. Carbon & Grid Twin", st["H1"]))
+        out.append(_kv_table([
+            ("ΔT (what-if)", carb.get("delta_t_c", "—")),
+            ("kWh/yr", carb.get("kwh_per_year", "—")),
+            ("CO₂ tons/yr", carb.get("co2_tons_per_year", "—")),
+            ("Grid MW shave", carb.get("grid_mw_peak_shave", "—")),
+        ]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 21 Citizen Heat Mesh
+    cit = report.get("citizen", {}) or {}
+    if cit.get("present"):
+        out.append(_p("21. Citizen Heat Mesh", st["H1"]))
+        out.append(_kv_table([
+            ("Reports", cit.get("n_reports", 0)),
+            ("Note", cit.get("note", "")),
+        ]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 22 provenance & warnings
+    out.append(_p("22. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:

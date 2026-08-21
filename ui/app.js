@@ -509,6 +509,43 @@ function renderAnalytics() {
   renderUhi(d.uhi || {});
   renderGeo(d.geomorphology || {});
   renderLake(d.lake_effect || {});
+  renderTimeMachine(d.time_machine || {});
+  renderResilience(d.resilience || {});
+  renderCarbon(d.carbon || {});
+  renderCitizen(d.citizen || {});
+}
+
+function renderTimeMachine(tm){
+  if(!tm||!tm.present){ $("tmBody").innerHTML="<p class='hint'>time-machine unavailable</p>"; return;}
+  const rows=[
+    ["Past (2024-07-15 live)", tm.past.max_c!=null?fmt(tm.past.max_c)+"°C":"—"],
+    ["Present", tm.present_block.max_c!=null?fmt(tm.present_block.max_c)+"°C":"—"],
+    ["Future peak (forecast)", tm.future.peak_skin_c!=null?fmt(tm.future.peak_skin_c)+"°C":"—"],
+    ["What-if cool roof ΔT", tm.whatif.albedo_0_5_delta_c!=null?fmt(tm.whatif.albedo_0_5_delta_c)+"°C":"—"],
+  ];
+  $("tmBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") + `<p class="hint">${esc(tm.past.note||"")}</p>`;
+}
+function renderResilience(r){
+  if(!r||!r.present){ $("resilienceBody").innerHTML="<p class='hint'>resilience unavailable</p>"; return;}
+  const rows=[
+    ["Score / band", `<b>${fmt(r.score,0)}/100 — ${esc(r.band)}</b>`],
+    ["Top actions", esc((r.ranked_actions||[]).join(" · "))],
+  ];
+  $("resilienceBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("");
+}
+function renderCarbon(c){
+  if(!c||!c.present){ $("carbonBody").innerHTML="<p class='hint'>carbon twin unavailable</p>"; return;}
+  const rows=[
+    ["ΔT (what-if)", fmt(c.delta_t_c)+"°C"],
+    ["kWh/yr (400m² tile)", fmt(c.kwh_per_year,0)],
+    ["CO₂ tons/yr", fmt(c.co2_tons_per_year,2)],
+    ["Grid MW shave", fmt(c.grid_mw_peak_shave,2)+" MW"],
+  ];
+  $("carbonBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") + (c.note?`<p class="hint">${esc(c.note)}</p>`:"");
+}
+function renderCitizen(ci){
+  if(!ci||!ci.present){ $("citizenBody").innerHTML="<p class='hint'>no citizen reports — tap 'Report heat here' above</p>"; return;}
+  $("citizenBody").innerHTML = `<div><span>Reports</span><b>${ci.n_reports}</b></div>` + (ci.reports && ci.reports.length? `<p class="hint">${esc(ci.reports.slice(-3).map(r=>r.district+':'+r.note).join(' · '))}</p>` : "");
 }
 
 function renderUhi(u) {

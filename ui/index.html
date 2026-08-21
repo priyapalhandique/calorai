@@ -151,6 +151,24 @@
         <div id="uhiBody" class="kv-table"></div>
         <p class="hint">Intensity (core+mean) 30 · Extent 15 · Distribution 20 · Morphology 15 · Persistence 20 — <a href="/api/uhi" target="_blank" rel="noopener">full ranking /api/uhi</a></p>
       </div>
+      <div class="panel" style="border:1.5px solid #7dd3fc">
+        <h2>Heat Time-Machine — past / present / future / what-if</h2>
+        <div id="tmBody" class="kv-table"></div>
+        <div style="display:flex;gap:6px;margin-top:6px"><button class="pill ghost" onclick="document.getElementById('district').value='phoenix'; runAudit()">Phoenix</button><span class="hint">slider: past (2024-07-15 live) → present (mock) → future (forecast) → what-if (cool roof -ΔT)</span></div>
+      </div>
+      <div class="panel" style="border:1.5px solid #4a7a5a">
+        <h2>Community Resilience OS — 0-100</h2>
+        <div id="resilienceBody" class="kv-table"></div>
+        <p class="hint">Text “HEAT” to check my block → <a href="#" onclick="navigator.geolocation.getCurrentPosition(p=>fetch('/api/citizen/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lon:p.coords.longitude,district:document.getElementById('district').value})}).then(r=>r.json()).then(j=>alert('Reported '+j.id))); return false;">Report heat here (geolocation → 3D dot)</a> · <a href="/api/citizen/mesh" target="_blank">mesh /api/citizen/mesh</a></p>
+      </div>
+      <div class="panel">
+        <h2>Carbon & Grid Twin — kWh → CO₂ + peak MW</h2>
+        <div id="carbonBody" class="kv-table"></div>
+      </div>
+      <div class="panel">
+        <h2>Citizen Heat Mesh — crowdsourced dots</h2>
+        <div id="citizenBody" class="kv-table"></div>
+      </div>
       <div class="panel">
         <h2>Alerts (Sentinel R1–R13)</h2>
         <div id="alertsBody" class="alerts"></div>

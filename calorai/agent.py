@@ -434,8 +434,10 @@ class AuditAgent:
         )
 
         # What-if cool-roof planner (default 0.50) — same lever as interventions[0].
+        from .analyst.carbon import carbon_block as _carbon_block
         from .analyst.schedule import work_rest_schedule
         from .analyst.terrain import flight_overlay, terrain_block
+        from .analyst.time_machine import time_machine_block as _tm_block
         from .analyst.whatif import whatif_cool_roof
 
         whatif_block = whatif_cool_roof(
@@ -482,6 +484,11 @@ class AuditAgent:
             district_lon=self.district.lon,
             district_name=self.district.name,
         )
+        time_machine_block = _tm_block(district=req.district, date=req.date)
+        carbon_block_data = _carbon_block(delta_t_c=whatif_block.get("delta_t_c"), district=req.district)
+        from .analyst.citizen import mesh as _citizen_mesh
+
+        citizen_block = _citizen_mesh()
         # UHI prevalence — synthesized from the blocks above (no new API)
         from .analyst.uhi import uhi_prevalence_block as _uhi_block
 
@@ -612,6 +619,9 @@ class AuditAgent:
             "flight": flight_block,
             "geomorphology": geo_block,
             "lake_effect": lake_block,
+            "time_machine": time_machine_block,
+            "carbon": carbon_block_data,
+            "citizen": citizen_block,
             # M3 (D7) — the responder's plan for this exact district/hour.
             "response": {
                 "misting": misting_plan(
@@ -643,8 +653,10 @@ class AuditAgent:
         }
         # UHI prevalence — depends on the finished report, so compute now
         from .analyst.uhi import uhi_prevalence_block as _uhi_block
+        from .analyst.resilience import resilience_block as _res_block
 
         report["uhi"] = _uhi_block(report)
+        report["resilience"] = _res_block(report)
         # Sentinel (D7) — threshold rules over the finished report.
         report["alerts"] = evaluate_alerts(report)
         if narrate:

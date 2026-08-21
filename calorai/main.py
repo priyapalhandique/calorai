@@ -158,6 +158,49 @@ def uhi(
     return {"date": date, "threshold_c": threshold_c, "ranked": ranked, "n_districts": len(ranked)}
 
 
+@app.get("/api/time_machine")
+def time_machine(
+    district: str = Query("phoenix", description="district key"),
+    date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
+    source: str | None = Query(None, description="auto | mock | live"),
+) -> dict[str, Any]:
+    """Heat Time-Machine — past / present / future / what-if slider."""
+    from .analyst.time_machine import time_machine_block
+
+    return time_machine_block(district=district, date=date)
+
+
+@app.get("/api/citizen/mesh")
+def citizen_mesh() -> dict[str, Any]:
+    from .analyst.citizen import mesh
+
+    return mesh()
+
+
+@app.post("/api/citizen/report")
+def citizen_report(payload: dict[str, Any]) -> dict[str, Any]:
+    from .analyst.citizen import report_heat
+
+    try:
+        lat = float(payload.get("lat"))
+        lon = float(payload.get("lon"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="lat/lon required")
+    return report_heat(lat=lat, lon=lon, district=str(payload.get("district", "phoenix")), note=str(payload.get("note", "")))
+
+
+@app.get("/api/resilience")
+def resilience(
+    district: str = Query("phoenix", description="district key"),
+    date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
+    threshold_c: float = Query(30.0),
+    source: str | None = Query(None, description="auto | mock | live"),
+) -> dict[str, Any]:
+    req = AuditRequest(district=district, date=date, hour=14, threshold_c=threshold_c, data_source=source, narrator_kind=None)
+    rep = AuditAgent(req).run(narrate=False)
+    return rep.get("resilience", {})
+
+
 @app.get("/api/brief")
 def brief(
     date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
@@ -252,6 +295,10 @@ def analysis(
         "flight": report.get("flight", {}),
         "geomorphology": report.get("geomorphology", {}),
         "lake_effect": report.get("lake_effect", {}),
+        "time_machine": report.get("time_machine", {}),
+        "carbon": report.get("carbon", {}),
+        "citizen": report.get("citizen", {}),
+        "resilience": report.get("resilience", {}),
         "uhi": report.get("uhi", {}),
         "response": report["response"],
         "analysis": report["analysis"],

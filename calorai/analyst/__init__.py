@@ -14,9 +14,13 @@ from .statistics import (
     tile_statistics_block,
 )
 from .synoptic import synoptic_block
+from .carbon import carbon_block
+from .citizen import mesh as citizen_mesh, report_heat as citizen_report
 from .geomorphology import geomorphology_block
 from .lake_effect import lake_effect_block
+from .resilience import resilience_block
 from .terrain import flight_overlay, terrain_block
+from .time_machine import time_machine_block
 from .uhi import rank_districts, uhi_prevalence_block
 from .whatif import whatif_cool_roof
 
@@ -42,6 +46,11 @@ __all__ = [
     "lake_effect_block",
     "uhi_prevalence_block",
     "rank_districts",
+    "carbon_block",
+    "citizen_mesh",
+    "citizen_report",
+    "resilience_block",
+    "time_machine_block",
     "whatif_cool_roof",
     "work_rest_schedule",
 ]

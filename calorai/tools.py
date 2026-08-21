@@ -471,6 +471,53 @@ def _lake_effect(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "time_machine",
+    "Heat Time-Machine — past / present / future / what-if slider (history + forecast).",
+    ["time machine", "past", "history", "future", "forecast", "whatif", "time travel"],
+)
+def _time_machine(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["time_machine"], "district": report["district"]}
+
+
+@tool(
+    "resilience",
+    "Community Resilience OS — 0-100 resilience score + ranked actions (send HEAT to check my block).",
+    ["resilience", "community", "resilient", "HEAT", "check my block"],
+)
+def _resilience(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["resilience"], "district": report["district"]}
+
+
+@tool(
+    "carbon",
+    "Carbon & Grid Twin — cool-roof delta → kWh → CO2 tons + grid MW peak shave.",
+    ["carbon", "CO2", "grid", "kwh", "emissions", "peak"],
+)
+def _carbon(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["carbon"], "district": report["district"]}
+
+
+@tool(
+    "citizen",
+    "Citizen Heat Mesh — crowdsourced heat reports (text HEAT, geolocation → 3D dot).",
+    ["citizen", "mesh", "report heat", "crowdsource", "dot", "HEAT"],
+)
+def _citizen(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    from .analyst.citizen import mesh, report_heat
+
+    # if lat/lon supplied, report; else return mesh
+    if args.get("lat") is not None and args.get("lon") is not None:
+        try:
+            return report_heat(lat=float(args["lat"]), lon=float(args["lon"]), district=str(args.get("district", ctx.district)), note=str(args.get("note", "")))
+        except Exception as exc:
+            return {"present": False, "error": str(exc)}
+    return mesh()
+
+
+@tool(
     "uhi",
     "UHI prevalence — where is the heat island strongest and why (core, extent, distribution, morphology, persistence).",
     ["uhi", "heat island", "urban heat", "prevalence", "hottest district", "ranking"],
