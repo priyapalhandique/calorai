@@ -548,11 +548,15 @@ def _web_search(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
             pass
     # budget check — $10 free tier, stop at $9.50 to keep headroom
     total_spent = 0.0
+    total_tokens = 0
     if budget_path.exists():
         try:
-            total_spent = float(json.loads(budget_path.read_text(encoding="utf-8")).get("total_cost", 0.0))
+            bj = json.loads(budget_path.read_text(encoding="utf-8"))
+            total_spent = float(bj.get("total_cost", 0.0))
+            total_tokens = int(bj.get("total_tokens", 0))
         except Exception:
             total_spent = 0.0
+            total_tokens = 0
     if total_spent >= 9.50:
         return {"present": False, "query": query, "reason": f"Exa budget cap $9.50 reached (spent ${total_spent:.3f}/$10 free) — using cache only", "cached": False}
     try:
@@ -570,21 +574,45 @@ def _web_search(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
                 "publishedDate": getattr(r, "published_date", None),
             })
         cost = getattr(res, "cost_dollars", None)
-        # costDollars may be object with .total
         cost_val = 0.0
         if cost is not None:
             try:
                 cost_val = float(getattr(cost, "total", cost) or 0.0)
             except Exception:
                 cost_val = 0.0
-        out = {"present": True, "query": query, "results": results, "costDollars": cost, "cost_val": cost_val}
+        # token estimate: ~4 chars per token (tilde), highlights only
+        est_chars = sum(len(h or "") for r in results for h in (r.get("highlights") or []))
+        est_tokens = max(1, est_chars // 4)
+        rate_per_token = cost_val / est_tokens if est_tokens else 0.0
+        rate_per_1k = rate_per_token * 1000
+        rate_per_1m = rate_per_token * 1_000_000
+        out = {
+            "present": True,
+            "query": query,
+            "results": results,
+            "costDollars": cost,
+            "cost_val": cost_val,
+            "est_tokens": est_tokens,
+            "rate_per_token": round(rate_per_token, 6),
+            "rate_per_1k_tokens": round(rate_per_1k, 4),
+            "rate_per_1m_tokens": round(rate_per_1m, 2),
+            "budget_spent_before": round(total_spent, 4),
+            "budget_tokens_before": total_tokens,
+        }
         # write cache + budget (efficient — next identical query is free for 24h)
         try:
-            cache_path.write_text(json.dumps(out, default=str), encoding="utf-8")
             new_total = total_spent + cost_val
-            budget_path.write_text(json.dumps({"total_cost": round(new_total, 4), "updated": time.time()}), encoding="utf-8")
+            new_tokens = total_tokens + est_tokens
+            avg_rate_1m = round((new_total / new_tokens * 1_000_000) if new_tokens else 0, 2)
+            budget_path.write_text(
+                json.dumps({"total_cost": round(new_total, 4), "total_tokens": new_tokens, "avg_rate_per_1m": avg_rate_1m, "updated": time.time()}),
+                encoding="utf-8",
+            )
+            cache_path.write_text(json.dumps(out, default=str), encoding="utf-8")
             out["budget_spent"] = round(new_total, 4)
+            out["budget_tokens"] = new_tokens
             out["budget_remaining"] = round(10.0 - new_total, 4)
+            out["avg_rate_per_1m"] = avg_rate_1m
         except Exception:
             pass
         return out
