@@ -516,24 +516,50 @@ def _bus_stops(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     ["search", "find", "nearest", "where is", "cooling center", "shelter"],
 )
 def _web_search(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    import hashlib
+    import json
     import os
+    import time
+    from pathlib import Path
 
     query = str(args.get("query") or args.get("q") or "").strip()
     if not query:
         return {"present": False, "reason": "no query"}
     # Mock mode — never hit Exa in tests (conftest pins mock)
     if os.getenv("CALORAI_DATA_SOURCE", "").lower() == "mock" or not os.getenv("EXA_API_KEY"):
-        # Check if we're in mock test run via the ctx source mock
         from .data_source import resolve_source
 
         _, mode = resolve_source(args.get("source"))
         if mode == "mock":
             return {"present": False, "reason": "mock mode — no web", "query": query}
+    # $10 free tier guard — cache-first + budget cap
+    cache_dir = Path("data/cache/exa")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    budget_path = cache_dir / "_budget.json"
+    # check cache (24h TTL)
+    qhash = hashlib.sha256(query.lower().encode()).hexdigest()[:16]
+    cache_path = cache_dir / f"search_{qhash}.json"
+    if cache_path.exists() and time.time() - cache_path.stat().st_mtime < 24 * 3600:
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            cached["cached"] = True
+            return cached
+        except Exception:
+            pass
+    # budget check — $10 free tier, stop at $9.50 to keep headroom
+    total_spent = 0.0
+    if budget_path.exists():
+        try:
+            total_spent = float(json.loads(budget_path.read_text(encoding="utf-8")).get("total_cost", 0.0))
+        except Exception:
+            total_spent = 0.0
+    if total_spent >= 9.50:
+        return {"present": False, "query": query, "reason": f"Exa budget cap $9.50 reached (spent ${total_spent:.3f}/$10 free) — using cache only", "cached": False}
     try:
         from exa_py import Exa
 
         exa = Exa(api_key=os.getenv("EXA_API_KEY"))
-        # Recommended request per build-with-exa skill: query + type auto + highlights
+        # Recommended request per build-with-exa skill: query + type auto + highlights (no extra params)
         res = exa.search(query, type="auto", contents={"highlights": True})
         results = []
         for r in (res.results or [])[:5]:
@@ -543,7 +569,25 @@ def _web_search(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
                 "highlights": getattr(r, "highlights", None) or getattr(r, "highlights", []) or [],
                 "publishedDate": getattr(r, "published_date", None),
             })
-        return {"present": True, "query": query, "results": results, "costDollars": getattr(res, "cost_dollars", None)}
+        cost = getattr(res, "cost_dollars", None)
+        # costDollars may be object with .total
+        cost_val = 0.0
+        if cost is not None:
+            try:
+                cost_val = float(getattr(cost, "total", cost) or 0.0)
+            except Exception:
+                cost_val = 0.0
+        out = {"present": True, "query": query, "results": results, "costDollars": cost, "cost_val": cost_val}
+        # write cache + budget (efficient — next identical query is free for 24h)
+        try:
+            cache_path.write_text(json.dumps(out, default=str), encoding="utf-8")
+            new_total = total_spent + cost_val
+            budget_path.write_text(json.dumps({"total_cost": round(new_total, 4), "updated": time.time()}), encoding="utf-8")
+            out["budget_spent"] = round(new_total, 4)
+            out["budget_remaining"] = round(10.0 - new_total, 4)
+        except Exception:
+            pass
+        return out
     except Exception as exc:
         return {"present": False, "query": query, "error": str(exc)}
 
@@ -554,7 +598,11 @@ def _web_search(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     ["fetch", "open", "read page", "summarize page"],
 )
 def _web_fetch(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    import hashlib
+    import json
     import os
+    import time
+    from pathlib import Path
 
     url = str(args.get("url") or "").strip()
     if not url:
@@ -567,6 +615,26 @@ def _web_fetch(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
             return {"present": False, "reason": "mock mode — no web", "url": url}
     if not os.getenv("EXA_API_KEY"):
         return {"present": False, "reason": "no EXA_API_KEY", "url": url}
+    cache_dir = Path("data/cache/exa")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    budget_path = cache_dir / "_budget.json"
+    uhash = hashlib.sha256(url.lower().encode()).hexdigest()[:16]
+    cache_path = cache_dir / f"fetch_{uhash}.json"
+    if cache_path.exists() and time.time() - cache_path.stat().st_mtime < 24 * 3600:
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            cached["cached"] = True
+            return cached
+        except Exception:
+            pass
+    total_spent = 0.0
+    if budget_path.exists():
+        try:
+            total_spent = float(json.loads(budget_path.read_text(encoding="utf-8")).get("total_cost", 0.0))
+        except Exception:
+            total_spent = 0.0
+    if total_spent >= 9.50:
+        return {"present": False, "url": url, "reason": f"Exa budget cap $9.50 reached (spent ${total_spent:.3f}/$10 free) — using cache only"}
     try:
         from exa_py import Exa
 
@@ -577,13 +645,33 @@ def _web_fetch(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
         item = (getattr(res, "results", None) or [None])[0]
         if item is None:
             return {"present": False, "url": url, "reason": "no content"}
-        return {
+        cost = getattr(res, "cost_dollars", None)
+        cost_val = 0.0
+        if cost is not None:
+            try:
+                cost_val = float(getattr(cost, "total", cost) or 0.0)
+            except Exception:
+                cost_val = 0.0
+        # get_contents is cheaper; default to $0.005 if no cost reported
+        if cost_val == 0.0:
+            cost_val = 0.005
+        out = {
             "present": True,
             "url": url,
             "title": getattr(item, "title", ""),
             "highlights": getattr(item, "highlights", None) or [],
             "text": (getattr(item, "text", "") or "")[:4000],
+            "cost_val": cost_val,
         }
+        try:
+            cache_path.write_text(json.dumps(out, default=str), encoding="utf-8")
+            new_total = total_spent + cost_val
+            budget_path.write_text(json.dumps({"total_cost": round(new_total, 4), "updated": time.time()}), encoding="utf-8")
+            out["budget_spent"] = round(new_total, 4)
+            out["budget_remaining"] = round(10.0 - new_total, 4)
+        except Exception:
+            pass
+        return out
     except Exception as exc:
         return {"present": False, "url": url, "error": str(exc)}
 
