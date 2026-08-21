@@ -449,6 +449,18 @@ def _geomorphology(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "describe_map",
+    "Describe what's on the district heat map — like VoxMind describes the screen: district, range, equity, UHI, and suggested actions.",
+    ["describe", "what do you see", "what's on my screen", "summarize map", "explain heatmap"],
+)
+def _describe_map(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    from .analyst.describe import describe_heatmap
+
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return describe_heatmap(report)
+
+
+@tool(
     "lake_effect",
     "Great Lake evaporative cooling — lake-detected breeze, cool K, evaporative boost lever (diagnostic).",
     ["lake", "great lake", "lake effect", "breeze", "evaporative", "cooling lever"],

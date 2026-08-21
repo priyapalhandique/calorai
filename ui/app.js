@@ -907,21 +907,46 @@ async function sendAsk(query) {
 /* ------------------------------------------------------------------ voice */
 
 let recognition = null;
+let wakeActive = false;
 try {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SR) {
     recognition = new SR();
     recognition.lang = "en-US";
+    recognition.continuous = true;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (ev) => {
-      const q = ev.results[0][0].transcript;
-      $("ask").value = q;
-      setMic(false);
-      sendAsk(q);
+      const transcript = ev.results[ev.results.length - 1][0].transcript.trim();
+      const lower = transcript.toLowerCase();
+      // VoxMind-inspired wake word: hey calorai / hey vox -> activates continuous listening
+      if (lower.includes("hey calorai") || lower.includes("hey vox") || lower.includes("hey vo")) {
+        wakeActive = true;
+        $("voiceHint").textContent = '✓ Hey calorai heard — listening... say "describe my map" or any query, or "shutdown" to stop.';
+        setMic(true);
+        // strip wake phrase and send remainder if any
+        const stripped = transcript.replace(/hey\s+(calorai|vox|voxmind)[,\s]*/i, "").trim();
+        if (stripped.length > 3) { $("ask").value = stripped; sendAsk(stripped); }
+        return;
+      }
+      if (lower === "shutdown" || lower === "stop listening" || lower === "exit") {
+        wakeActive = false;
+        $("voiceHint").textContent = 'Voice paused — say "Hey calorai" to resume or click 🎙.';
+        setMic(false);
+        try { recognition.stop(); } catch(_){}
+        return;
+      }
+      // if wakeActive or mic explicitly listening, treat as command
+      if (wakeActive || $("mic").classList.contains("listening")) {
+        const q = transcript.replace(/hey\s+(calorai|vox|voxmind)[,\s]*/i, "").trim() || transcript;
+        $("ask").value = q;
+        // keep listening if wakeActive (VoxMind continuous mode)
+        if (!wakeActive) setMic(false);
+        sendAsk(q);
+      }
     };
-    recognition.onerror = () => setMic(false);
-    recognition.onend = () => setMic(false);
+    recognition.onerror = () => { if (!wakeActive) setMic(false); };
+    recognition.onend = () => { if (wakeActive) { try { recognition.start(); } catch(_){ setMic(false); } } else setMic(false); };
   } else {
     $("voiceHint").textContent = "Voice input needs a Chromium/Safari browser; typing works everywhere.";
   }
@@ -934,10 +959,12 @@ function setMic(on) {
 
 $("mic").onclick = () => {
   if (!recognition) return;
-  if ($("mic").classList.contains("listening")) { recognition.stop(); return; }
+  if ($("mic").classList.contains("listening")) { wakeActive=false; recognition.stop(); setMic(false); return; }
   try {
+    wakeActive = false; // explicit mic click is one-shot; wake word enables continuous
     recognition.start();
     setMic(true);
+    $("voiceHint").textContent = 'Listening... say "Hey calorai, describe my map" or any query.';
   } catch (_) { /* already started */ }
 };
 

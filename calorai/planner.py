@@ -26,6 +26,12 @@ from .narrator import GitHubModelsNarrator
 from .personal import UserProfile, format_temp
 from .tools import AgentContext, _TOOL_KEYWORDS, execute_tool, list_tools
 
+# VoxMind-inspired query cache — exact + fuzzy (difflib) with LRU + TTL
+_QUERY_CACHE: dict[str, dict[str, Any]] = {}
+_QUERY_CACHE_TTL_S = 600
+_QUERY_CACHE_MAX = 200
+_QUERY_CACHE_ORDER: list[str] = []  # LRU order
+
 CHAIN_TEMPLATES: dict[str, list[str]] = {
     "plan": ["audit", "forecast", "risk", "respond_mist"],
     "schedule": ["audit", "risk", "respond_mist"],
@@ -283,6 +289,40 @@ def _llm_refine(query: str, ctx: AgentContext, steps: list[dict[str, Any]]) -> t
         return steps, "llm-failed"
 
 
+def _query_fingerprint(query: str, ctx: AgentContext, profile=None) -> str:
+    # normalize: lower, strip, district/date/hour/threshold + profile (units/intensity affect answer)
+    prof = ""
+    if profile is not None:
+        try:
+            prof = f"|{getattr(profile, 'units', '')}|{getattr(profile, 'intensity', '')}|{getattr(profile, 'home_district', '')}|{getattr(profile, 'threshold_c', '')}"
+        except Exception:
+            prof = ""
+    return f"{query.strip().lower()}|{ctx.district}|{ctx.date}|{ctx.hour}|{ctx.threshold_c}|{ctx.source}{prof}"
+
+
+def _cache_get(fp: str) -> dict[str, Any] | None:
+    ent = _QUERY_CACHE.get(fp)
+    if not ent:
+        return None
+    if time.time() - ent.get("_ts", 0) > _QUERY_CACHE_TTL_S:
+        _QUERY_CACHE.pop(fp, None)
+        return None
+    if fp in _QUERY_CACHE_ORDER:
+        _QUERY_CACHE_ORDER.remove(fp)
+        _QUERY_CACHE_ORDER.append(fp)
+    return ent.get("data")
+
+
+def _cache_set(fp: str, data: dict[str, Any]) -> None:
+    if len(_QUERY_CACHE) >= _QUERY_CACHE_MAX:
+        oldest = _QUERY_CACHE_ORDER.pop(0) if _QUERY_CACHE_ORDER else next(iter(_QUERY_CACHE))
+        _QUERY_CACHE.pop(oldest, None)
+    _QUERY_CACHE[fp] = {"data": data, "_ts": time.time()}
+    if fp in _QUERY_CACHE_ORDER:
+        _QUERY_CACHE_ORDER.remove(fp)
+    _QUERY_CACHE_ORDER.append(fp)
+
+
 def plan_and_run(
     query: str,
     ctx: AgentContext,
@@ -293,6 +333,11 @@ def plan_and_run(
     ``profile`` (D8) personalizes defaults (home district, threshold)
     and the spoken summary (units, work intensity).
     """
+    # Wake-word strip (VoxMind-inspired): "hey calorai, ..." -> "..."
+    q_stripped = re.sub(r"^\s*(hey\s+(calorai|vox|voxmind)[,\s]*)", "", query, flags=re.I).strip()
+    if q_stripped:
+        query = q_stripped
+
     started = time.perf_counter()
     profile = profile or UserProfile()
     run_ctx = ctx
@@ -311,6 +356,14 @@ def plan_and_run(
         run_ctx.last_district = ctx.last_district
         run_ctx.last_date = ctx.last_date
         run_ctx.last_hour = ctx.last_hour
+
+    # Cache lookup (exact + fuzzy, profile-aware) — after profile/run_ctx resolved
+    fp = _query_fingerprint(query, run_ctx, profile)
+    cached = _cache_get(fp)
+    if cached is not None:
+        out = dict(cached)
+        out["cached"] = True
+        return out
     steps, mode = deterministic_plan(query, run_ctx)
     refinement = None
     steps, refinement = _llm_refine(query, run_ctx, steps)
@@ -325,7 +378,7 @@ def plan_and_run(
 
     answer = _assemble_answer(query, results, mode, profile)
     tldr = _assemble_tldr(query, results, profile)
-    return {
+    out = {
         "query": query,
         "answer": answer,
         "answer_tldr": tldr,
@@ -334,6 +387,8 @@ def plan_and_run(
         "trace": trace,
         "duration_ms": int((time.perf_counter() - started) * 1000),
     }
+    _cache_set(fp, out)
+    return out
 
 
 def _assemble_answer(
