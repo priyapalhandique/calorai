@@ -13,7 +13,7 @@ This document discloses how AI tools were used to build this project, as require
 | Orchestration / integration | **Muse Spark / opencode** | Maintained the build plan, branch handoffs, QA checklist, merge discipline, and credit guardrails |
 | Backend / physics worker | **Codex** | Implemented and tested backend, physics, analyst, script, and validation changes under the repo's ownership matrix |
 | Frontend / report worker | **Cursor AI** | Implemented UI/report/tooling changes under the repo's ownership matrix |
-| Primary coding models | AI coding models available inside those tools | Generated implementation code, tests, and documentation text under my direction |
+| Primary coding models | **muse-spark-1.2-contributor-free** (opencode) + **DeepSeek v4 flash** (earlier backend implementation) + models inside Codex/Cursor | Generated implementation code, tests, and documentation text under my direction |
 | Planning / architecture model | planning & architecture model (exact name/version TBD) | Used during early planning and architecture phases to pressure-test the design before implementation |
 
 **Plain statement:** the AI generated the code and most of the prose. I directed it at the level of design, physics, and specification, reviewed every change before it was accepted, and take responsibility for the correctness of what is shipped.
