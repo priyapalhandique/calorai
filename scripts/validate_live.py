@@ -31,8 +31,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from calorai.agent import AuditAgent, AuditRequest
 from calorai.ml.forecast import forecast_skin_temp, load_forecast
 
-os.environ.pop("CALORAI_DATA_SOURCE", None)
-
 DATE = "2024-07-15"
 DISTRICTS = ["phoenix"]
 OUT = Path("data/validation_live.json")
@@ -171,30 +169,40 @@ def validate_district(name: str, date: str) -> dict:
 
 
 def main() -> None:
-    results: list[dict] = []
-    for d in DISTRICTS:
-        print(f"--- validating {d} {DATE} ---", flush=True)
-        try:
-            results.append(validate_district(d, DATE))
-        except Exception as exc:  # noqa: BLE001 - report and continue
-            print(f"!! {d}: {type(exc).__name__}: {exc}", flush=True)
-            # Record the error for this district and continue so the script
-            # always writes `data/validation_live.json` instead of exiting
-            # silently when one district fails.
-            results.append({"district": d, "error": f"{type(exc).__name__}: {exc}"})
-            continue
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(results, indent=2), encoding="utf-8")
-    print(f"wrote {OUT}", flush=True)
-    for res in results:
-        print(
-            f"{res['district']:<10} surrogate_mae {res['surrogate_mae_vs_tile_max_c']:>6} "
-            f"physics_mae {res['physics_mae_vs_tile_max_c']:>6} "
-            f"surr-vs-phys {res['surrogate_vs_physics_mae_c']:>6} "
-            f"layer_offset {res['layer_offset_c']:>+6} "
-            f"peak_tile {res['peak_tile_c']} @ {res['peak_tile_hour']}h "
-            f"peak_air {res['peak_air_c']} @ {res['peak_air_hour']}h"
-        )
+    # This validator is intentionally live-only when executed, but importing
+    # it from tests must not clear the suite's mock pin.
+    old_source = os.environ.pop("CALORAI_DATA_SOURCE", None)
+    try:
+        results: list[dict] = []
+        for d in DISTRICTS:
+            print(f"--- validating {d} {DATE} ---", flush=True)
+            try:
+                results.append(validate_district(d, DATE))
+            except Exception as exc:  # noqa: BLE001 - report and continue
+                print(f"!! {d}: {type(exc).__name__}: {exc}", flush=True)
+                # Record the error for this district and continue so the script
+                # always writes `data/validation_live.json` instead of exiting
+                # silently when one district fails.
+                results.append({"district": d, "error": f"{type(exc).__name__}: {exc}"})
+                continue
+        OUT.parent.mkdir(parents=True, exist_ok=True)
+        OUT.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        print(f"wrote {OUT}", flush=True)
+        for res in results:
+            if "error" in res:
+                print(f"{res['district']:<10} ERROR {res['error']}", flush=True)
+                continue
+            print(
+                f"{res['district']:<10} surrogate_mae {res['surrogate_mae_vs_tile_max_c']:>6} "
+                f"physics_mae {res['physics_mae_vs_tile_max_c']:>6} "
+                f"surr-vs-phys {res['surrogate_vs_physics_mae_c']:>6} "
+                f"layer_offset {res['layer_offset_c']:>+6} "
+                f"peak_tile {res['peak_tile_c']} @ {res['peak_tile_hour']}h "
+                f"peak_air {res['peak_air_c']} @ {res['peak_air_hour']}h"
+            )
+    finally:
+        if old_source is not None:
+            os.environ["CALORAI_DATA_SOURCE"] = old_source
 
 
 if __name__ == "__main__":
