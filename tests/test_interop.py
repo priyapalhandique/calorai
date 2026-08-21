@@ -1,4 +1,4 @@
-"""Interop export tests — Forma-friendly GeoJSON/CSV/ZIP handoff.
+"""Interop export tests — open GeoJSON/CSV/ZIP handoff.
 
 Verifies the three-file package is structurally valid: GeoJSON that
 parses as a FeatureCollection of Points, CSVs with the right headers

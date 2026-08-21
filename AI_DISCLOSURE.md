@@ -1,6 +1,6 @@
 # AI Disclosure — calorai
 
-*FortyGuard Hackathon'26 · "Building the World's Temperature AI" · Submitted under the Agentic AI track (Track 6), with Track 2 (Future Buildings & Energy) and Track 5 (Model Designing) as secondary tags.*
+*FortyGuard Hackathon'26 · "Building the World's Temperature AI" · Submitted under the Agentic AI track (Track 6). Track 2-style building energy work and Track 5-style modeling are implemented as use cases inside the single Track 6 submission, not as separate secondary tags.*
 
 This document discloses how AI tools were used to build this project, as required by the hackathon rules. It is written in my own voice, is intentionally modest, and every capability claimed here is verifiable in the repository — in code, tests, or documentation — not in intention.
 
@@ -10,8 +10,10 @@ This document discloses how AI tools were used to build this project, as require
 
 | Role | Tool / model | How it was used |
 |------|--------------|-----------------|
-| Coding platform | **opencode** (terminal-based AI coding agent) | All editing, file operations, test runs, live API probes, and git operations were executed through opencode's agent harness |
-| Primary coding model | **DeepSeek v4 flash** | Wrote the majority of the implementation code, tests, and documentation text under my direction |
+| Orchestration / integration | **Muse Spark / opencode** | Maintained the build plan, branch handoffs, QA checklist, merge discipline, and credit guardrails |
+| Backend / physics worker | **Codex** | Implemented and tested backend, physics, analyst, script, and validation changes under the repo's ownership matrix |
+| Frontend / report worker | **Cursor AI** | Implemented UI/report/tooling changes under the repo's ownership matrix |
+| Primary coding models | AI coding models available inside those tools | Generated implementation code, tests, and documentation text under my direction |
 | Planning / architecture model | planning & architecture model (exact name/version TBD) | Used during early planning and architecture phases to pressure-test the design before implementation |
 
 **Plain statement:** the AI generated the code and most of the prose. I directed it at the level of design, physics, and specification, reviewed every change before it was accepted, and take responsibility for the correctness of what is shipped.
@@ -24,7 +26,7 @@ The value I contributed was not in the prompts themselves but in how they were s
 
 **Domain grounding instead of guessing.** When a physics feature was needed, I did not ask the model to "invent" an equation. I supplied the source, the equation number, and the reference. For example, the street-canyon sky-view factor was implemented from Oke et al. *Urban Climates* Fig. 5.10; the Priestley–Taylor latent-heat term from Monteith & Unsworth (Eq. 13.40–13.41); the Stefan–Boltzmann linearization from Garg, *Thermal Physics* (Eq. 11.10). The book-to-code mapping lives in `docs/physics-references.md`. This kept the physics traceable to the literature rather than to pattern-matching.
 
-**Verification-driven prompting.** Every physics feature carried an acceptance criterion: unit tests plus a live API probe against a real U.S. district (Phoenix, San Jose, Manhattan, Chicago, Austin) plus a comparison of theory against the returned data. A feature was not "done" until all three held. This is why the test suite grew from 47 to 89 tests across the physics tiers.
+**Verification-driven prompting.** Every physics feature carried an acceptance criterion: unit tests plus a live API probe against a real U.S. district (Phoenix, San Jose, Manhattan, Chicago, Austin) plus a comparison of theory against the returned data. A feature was not "done" until all three held. This is why the test suite grew from 47 tests to more than 230 mock-pinned tests across the physics, agent, UI, report, ML, and export layers.
 
 **One feature per prompt, with acceptance criteria.** Instead of a single large specification, I asked for one physical mechanism at a time (sky-view factor → canyon albedo → canyon wind sheltering → force-restore storage → latent flux → sensitivity bands), each in its own prompt with its own tests. This made each change reviewable and revertible.
 
@@ -78,4 +80,4 @@ This document complements `ACKNOWLEDGEMENTS.md`, which separately identifies the
 
 ---
 
-*Prepared for the FortyGuard Hackathon'26 AI-tools disclosure. Claims herein are verifiable against the repository's code, tests (`tests/`, 89 passing), and documentation (`docs/physics-references.md`, `README.md`).*
+*Prepared for the FortyGuard Hackathon'26 AI-tools disclosure. Claims herein are verifiable against the repository's code, tests (`tests/`, 232 passing at the latest packaging check), and documentation (`docs/physics-references.md`, `README.md`).*

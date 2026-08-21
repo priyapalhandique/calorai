@@ -238,8 +238,8 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
 ### D0–D1 (Aug 18–19) — Foundations ✅
 - [x] Live pipeline fix, regression tests, product research, physics tiers A+B, Track 2/5 modules,
       PDF report, demo notebook, premium probe, disclosures (113 tests) — all committed/pushed
-- [ ] `CONCEPT.md` — problem → user → FortyGuard usage → measured result (feeds the 500-word summary)
-- [ ] README: hero equation, architecture diagram (4-module + NL loop), quickstart, "what doesn't work yet",
+- [x] `CONCEPT.md` — problem → user → FortyGuard usage → measured result (feeds the 500-word summary)
+- [x] README: hero equation, architecture diagram (4-module + NL loop), quickstart, "what doesn't work yet",
       one real API request + response, no hardcoded keys
 - [ ] `AI_DISCLOSURE.md` **update** (post-B): ML trained + validated on API data; LLM selects tools only;
       numbers always from physics/API; fill planner-model name when user supplies it
@@ -250,9 +250,9 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
       GH Actions cron ping `/api/health` ~10 min (keeps free tier awake through Sep 14 judging)
 - [ ] Verify public URL **in a fresh incognito window** (no install, no login); zero-credit-after-first-run path;
       screenshot/gif capture for README + video
-- [ ] **Interop export (Forma, Option A)**: `calorai/interop.py` — heat-tile GeoJSON FeatureCollection +
+- [x] **Open export package**: `calorai/interop.py` — heat-tile GeoJSON FeatureCollection +
       audit-table CSV + interventions CSV; `GET /api/export` (ZIP) + CLI `--export-out` + UI button +
-      `docs/interop-forma.md`; ~6 tests
+      `docs/export-package.md`; ~6 tests
 - [ ] **Location analysis**: `docs/location-analysis.md` + new mock subdivision districts (Maryvale,
       Vegas Strip, NYC East Harlem) + live probes (Vegas, NYC; Dallas optional) on 2024-07-15,
       small-AOI first, cache everything
@@ -308,7 +308,7 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
       Act 4 response (mist) — every act closes on a headline number; chat panel with trace;
       CDN-hosted deps only; no localStorage dependencies
 - [ ] PDF v2 (+equity, productivity, thermal-wind, downburst, forecast charts); notebook v2; README
-      (architecture diagram + screenshots); `docs/roadmap.md` presumptive topics; `docs/interop-forma.md`
+      (architecture diagram + screenshots); `docs/roadmap.md` presumptive topics; `docs/export-package.md`
 - [ ] Full suite green (~150 tests); incognito re-verify; mock-mode full pass
 
 ### D9 (Aug 29) — Video + summary + submit

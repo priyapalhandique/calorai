@@ -352,8 +352,8 @@ def _synoptic(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     "export",
-    "Forma-friendly interop package: tile GeoJSON + audit CSV + interventions CSV (ZIP).",
-    ["export", "download", "geojson", "csv", "forma", "interop", "package", "gis"],
+    "Open export package: tile GeoJSON + audit CSV + interventions CSV (ZIP).",
+    ["export", "download", "geojson", "csv", "interop", "package", "gis"],
 )
 def _export(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
     from .interop import export_zip_bytes

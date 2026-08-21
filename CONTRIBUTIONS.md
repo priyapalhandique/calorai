@@ -2,7 +2,7 @@
 
 *FortyGuard Hackathon'26 · "Building the World's Temperature AI" · Solo entry — Priyapal Handique, the calorai project.*
 
-This document records what I contributed back to FortyGuard during the build. I did not review the product from the brochure — I lived in the API: 7 endpoints exercised, 78,480 of 2,000,000 credits spent on real requests, and a 27-page Heat Intelligence premium probe at Phoenix. Everything below is evidence-led and verifiable in the repository (`docs/fortyguard-products.md` holds the full inventory and payload evidence).
+This document records what I contributed back to FortyGuard during the build. I did not review the product from the brochure — I lived in the API: 7 endpoints exercised, about 208,240 of 2,000,000 credits spent on real requests by the latest ledger, and a 27-page Heat Intelligence premium probe at Phoenix. Everything below is evidence-led and verifiable in the repository (`docs/fortyguard-products.md` holds the full inventory and payload evidence).
 
 ---
 

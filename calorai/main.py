@@ -246,7 +246,7 @@ def export_package(
     threshold_c: float = Query(30.0),
     source: str | None = Query(None, description="auto | mock | live"),
 ) -> Response:
-    """Forma-friendly interop package: tile GeoJSON + audit CSV + interventions CSV (ZIP)."""
+    """Open export package: tile GeoJSON + audit CSV + interventions CSV (ZIP)."""
     from .interop import export_zip_bytes
 
     try:
