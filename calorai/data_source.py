@@ -478,6 +478,10 @@ class LiveFortyGuardSource:
         self.client = FortyGuardClient()
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Analysis layers (exceedance/persistence) are Premium-plan. We
+        # probe once per process; once a layer proves unavailable it is
+        # skipped (charged-but-empty heatmap calls are the main live leak).
+        self._analysis_layers_unavailable: set[str] = set()
 
     # ----------------------------------------------------------- helpers
 
@@ -793,15 +797,25 @@ class LiveFortyGuardSource:
         heatmap = self.get_heatmap(district_name, date, hour)
         exceedance = persistence = None
         if with_exceedance:
-            try:
-                exceedance = self.get_heatmap(
-                    district_name, date, hour, "exceedance", threshold
-                )
-                persistence = self.get_heatmap(
-                    district_name, date, hour, "persistence", threshold
-                )
-            except Exception as exc:  # analysis layers may be plan-limited
-                warnings.append(f"analysis layers unavailable: {exc}")
+            for layer, analytic in (
+                ("exceedance", "exceedance"),
+                ("persistence", "persistence"),
+            ):
+                if analytic in self._analysis_layers_unavailable:
+                    warnings.append(f"{layer} layer unavailable (plan-limited); skipped")
+                    continue
+                try:
+                    if analytic == "exceedance":
+                        exceedance = self.get_heatmap(
+                            district_name, date, hour, "exceedance", threshold
+                        )
+                    else:
+                        persistence = self.get_heatmap(
+                            district_name, date, hour, "persistence", threshold
+                        )
+                except Exception as exc:  # analysis layers may be plan-limited
+                    self._analysis_layers_unavailable.add(analytic)
+                    warnings.append(f"analysis layers unavailable: {exc}")
         try:
             env = self.get_environmental_parameters(district_name, date)
         except Exception as exc:

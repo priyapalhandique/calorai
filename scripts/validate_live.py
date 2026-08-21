@@ -20,6 +20,7 @@ numbers are mirrored into docs/ml-validation.md by the author after review.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import statistics
 import sys
@@ -33,8 +34,34 @@ from calorai.ml.forecast import forecast_skin_temp, load_forecast
 os.environ.pop("CALORAI_DATA_SOURCE", None)
 
 DATE = "2024-07-15"
-DISTRICTS = ["phoenix", "san-jose"]
+DISTRICTS = ["phoenix"]
 OUT = Path("data/validation_live.json")
+
+
+def _cache_key(endpoint: str, **args: object) -> str:
+    raw = json.dumps({"endpoint": endpoint, **args}, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode()).hexdigest()[:20]
+
+
+def cached_hours(district: str, date: str) -> list[int]:
+    """Hours whose single-hour tcm heatmap is already on disk (live-cached)."""
+    from calorai.data_source import LiveFortyGuardSource
+
+    cache_dir = Path(LiveFortyGuardSource().cache_dir)
+    present: list[int] = []
+    for h in range(24):
+        key = _cache_key(
+            "heatmap",
+            district=district,
+            date=date,
+            hour=h,
+            analytic_type="tcm",
+            threshold=None,
+            granularity=100,
+        )
+        if (cache_dir / f"{key}.json").exists():
+            present.append(h)
+    return present
 
 
 def surrogate_series(report: dict) -> dict[int, float]:
@@ -67,13 +94,33 @@ def surrogate_series(report: dict) -> dict[int, float]:
 
 
 def validate_district(name: str, date: str) -> dict:
+    from calorai.data_source import LiveFortyGuardSource
+
+    cache_dir = Path(LiveFortyGuardSource().cache_dir)
+    env_key = _cache_key(
+        "env_params",
+        district=name,
+        date=date,
+        temperature_anchor_c=None,
+        schema_version=2,
+    )
+    if not (cache_dir / f"{env_key}.json").exists():
+        raise RuntimeError(
+            f"env series not cached for {name} {date} — refusing a live pull; "
+            "run once with a key then reuse cached heatmaps"
+        )
+    hours = cached_hours(name, date)
+    if not hours:
+        raise RuntimeError(f"no cached tcm heatmaps for {name} {date}")
     rows: list[dict] = []
-    for h in range(24):
+    last_report: dict | None = None
+    for h in hours:
         req = AuditRequest(
             district=name, date=date, hour=h, with_exceedance=False, data_source="live"
         )
         agent = AuditAgent(req)
         report = agent.run(narrate=False)
+        last_report = report
         tvs = report["theory_vs_data"]
         tiles = agent.fetch_snapshot().heatmap.tiles
         rows.append(
@@ -87,7 +134,7 @@ def validate_district(name: str, date: str) -> dict:
                 "physics_c": round(float(tvs["predicted_skin_c"]), 2),
             }
         )
-    surr = surrogate_series(report)
+    surr = surrogate_series(last_report or {})
     for r in rows:
         r["surrogate"] = round(surr[r["hour"]], 2)
 
@@ -105,11 +152,12 @@ def validate_district(name: str, date: str) -> dict:
         "district": name,
         "date": date,
         "n_hours": len(rows),
+        "cached_hours": hours,
         "surrogate_mae_vs_tile_max_c": mae("observed_max_c", "surrogate"),
         "surrogate_mae_vs_tile_mean_c": mae("observed_mean_c", "surrogate"),
-        "physics_mae_vs_tile_max_c": mae("observed_max_c", "physics"),
-        "physics_mae_vs_tile_mean_c": mae("observed_mean_c", "physics"),
-        "surrogate_vs_physics_mae_c": mae("physics", "surrogate"),
+        "physics_mae_vs_tile_max_c": mae("observed_max_c", "physics_c"),
+        "physics_mae_vs_tile_mean_c": mae("observed_mean_c", "physics_c"),
+        "surrogate_vs_physics_mae_c": mae("physics_c", "surrogate"),
         "layer_offset_c": round(
             statistics.mean(r["physics_c"] - r["observed_max_c"] for r in rows), 3
         ),
@@ -123,10 +171,17 @@ def validate_district(name: str, date: str) -> dict:
 
 
 def main() -> None:
-    results = [validate_district(d, DATE) for d in DISTRICTS]
+    results: list[dict] = []
+    for d in DISTRICTS:
+        print(f"--- validating {d} {DATE} ---", flush=True)
+        try:
+            results.append(validate_district(d, DATE))
+        except Exception as exc:  # noqa: BLE001 - report and continue
+            print(f"!! {d}: {type(exc).__name__}: {exc}", flush=True)
+            raise
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(results, indent=2), encoding="utf-8")
-    print(f"wrote {OUT}")
+    print(f"wrote {OUT}", flush=True)
     for res in results:
         print(
             f"{res['district']:<10} surrogate_mae {res['surrogate_mae_vs_tile_max_c']:>6} "

@@ -41,7 +41,11 @@ class AuditBody(BaseModel):
     date: str = Field("2026-08-18", description="YYYY-MM-DD within catalog coverage")
     hour: int = Field(14, ge=0, le=23, description="audit hour, local")
     threshold_c: float = Field(30.0, description="exceedance threshold °C")
-    with_exceedance: bool = True
+    with_exceedance: bool = Field(
+        False,
+        description="include exceedance/persistence layers (plan-limited on live; "
+        "costs heatmap credits even when unavailable)",
+    )
     narration: str = Field("auto", description="auto | template | github-models | none")
     source: str | None = Field(
         None,

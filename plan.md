@@ -334,12 +334,13 @@ the repo, depth in the demo, honesty in "what doesn't work yet".**
 | Use | Est. cost | Done |
 |---|---|---|
 | Probes + failed experiments (irrecoverable) | ~26k | ✅ |
-| Probes/experiments to date (heatmaps + env + premium + live pulls) | ~111.2k total (5.6%) | ✅ |
+| Probes/experiments to date (heatmaps 156.1k + env 43.5k + premium 8.6k) | ~208.2k total (10.4%) | ✅ |
+| → 24-h heatmap-per-hour validation (phoenix 24 h + san-jose 4 h) | **~117k — 20× the ~4.5k plan line** | ✅ spent |
+| → plan-limited exceedance/persistence calls (charged but empty) | ~4 calls / ~17k — skipped after fix | ✅ |
 | Live locations: Las Vegas + Manhattan/NYC (+ Dallas optional) | ~9–13.5k | ⬜ |
-| Forecast validation pull (24-h series × 2 districts) — **pulled 2026-08-20, all cached** | ~4.5k | ✅ |
-| N5-a live street-view + satellite (1–2 parcels, Premium) | ~2–6k | ⬜ |
+| N5-a live street-view + satellite (1-2 parcels, Premium) | ~2–6k | ⬜ |
 | Bus-stop shade + misc demo headroom | ~3k | ⬜ |
-| **Total projected** | **~130–140k (≈7%)** | |
+| **Total projected** | **~235k (≈12%)** | |
 
 Discipline rules: cache every layer by area+date/time; no scope creep on live calls; failed tasks are
 free — retry liberally; **verify coverage (small-AOI probe) before any new AOI/date**; demo cached so
