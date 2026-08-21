@@ -137,6 +137,34 @@ def ask(body: AskBody) -> dict[str, Any]:
     return plan_and_run(body.query, ctx, profile=UserProfile.from_dict(body.profile))
 
 
+@app.get("/api/brief")
+def brief(
+    date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
+    threshold_c: float = Query(30.0),
+    source: str | None = Query(None, description="auto | mock | live"),
+) -> dict[str, Any]:
+    """Morning brief: sweep all districts, rank by vulnerability/WBGT."""
+    from .data_source import DISTRICTS
+
+    rows: list[dict[str, Any]] = []
+    for key in sorted(DISTRICTS):
+        try:
+            req = AuditRequest(district=key, date=date, hour=14, threshold_c=threshold_c, data_source=source, narrator_kind=None)
+            rep = AuditAgent(req).run(narrate=False)
+            rows.append({
+                "district": rep["district"],
+                "key": key,
+                "wbgt_c": rep["exposure"]["wbgt_c"],
+                "max_c": rep["snapshot"]["max_c"],
+                "vuln_score": (rep.get("vulnerability", {}).get("score", {}) or {}).get("score"),
+                "vuln_band": (rep.get("vulnerability", {}).get("score", {}) or {}).get("band"),
+            })
+        except Exception as exc:
+            rows.append({"district": key, "error": str(exc)})
+    rows.sort(key=lambda r: r.get("vuln_score", -1) if isinstance(r.get("vuln_score"), (int, float)) else -1, reverse=True)
+    return {"date": date, "threshold_c": threshold_c, "source": rows[0].get("source", source) if rows else source, "districts": rows}
+
+
 @app.get("/api/analysis")
 def analysis(
     district: str = Query("phoenix", description="district key from /api/districts"),
@@ -197,6 +225,8 @@ def analysis(
         "elevation": report.get("elevation", {}),
         "landcover": report.get("landcover", {}),
         "synoptic": report.get("synoptic", {}),
+        "whatif": report.get("whatif", {}),
+        "schedule": report.get("schedule", {}),
         "response": report["response"],
         "analysis": report["analysis"],
         "alerts": (report.get("alerts") or {}).get("alerts", []),

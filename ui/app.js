@@ -502,6 +502,29 @@ function renderAnalytics() {
   renderSynoptic(d.synoptic || {});
   renderLandcover(d.landcover || {});
   renderElevation(d.elevation || {});
+  renderWhatif(d.whatif || {});
+  renderSchedule(d.schedule || {});
+}
+
+function renderWhatif(w) {
+  if (!w || !w.present) { $("whatifBody").innerHTML = "<p class='hint'>what-if unavailable</p>"; return; }
+  const rows = [
+    ["Albedo before → after", `${fmt(w.albedo_before,2)} → ${fmt(w.albedo_after,2)}`],
+    ["ΔT on hottest 20%", fmt(w.delta_t_c) + " °C"],
+    ["Removed flux", fmt(w.removed_flux_w_m2,0) + " W/m²"],
+    ["Annual saving (one 400m² tile)", fmtMoney(w.annual_saving_usd)],
+    ["Payback", w.payback_years ? fmt(w.payback_years,1) + " yr" : "—"],
+    ["Scope", esc(w.scope || "")],
+  ];
+  $("whatifBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("");
+}
+
+function renderSchedule(sc) {
+  if (!sc || !sc.present) { $("scheduleBody").innerHTML = "<p class='hint'>schedule unavailable</p>"; return; }
+  const rows = sc.rows || [];
+  const head = "<div class='row header'><span>Hour</span><span>WBGT</span><span>Work%</span></div>";
+  const body = rows.map(r=> r.present===false ? `<div class="row"><span>${r.hour}:00</span><span>—</span></div>` : `<div class="row"><span>${r.hour}:00</span><span>${fmt(r.wbgt_c)}°C ${esc(r.band)}</span><span>${r.work_pct}%</span></div>`).join("");
+  $("scheduleBody").innerHTML = head + body + (sc.note ? `<p class="hint">${esc(sc.note)}</p>` : "");
 }
 
 function drawHistogram(st) {
@@ -869,6 +892,17 @@ $("voiceToggle").onclick = () => {
 
 $("pdf").onclick = () => { window.location.href = "/api/report?" + auditParams().toString(); };
 $("export").onclick = () => { window.location.href = "/api/export?" + auditParams().toString(); };
+$("brief").onclick = async () => {
+  $("status").textContent = "briefing all districts…";
+  try {
+    const qs = new URLSearchParams({ date: $("date").value, threshold_c: $("threshold").value, source: $("source").value });
+    const res = await fetch("/api/brief?" + qs.toString());
+    const j = await res.json();
+    const rows = (j.districts || []).map(d=> `<div class="row"><span>${esc(d.district || d.key)}</span><span>${d.vuln_score!=null?fmt(d.vuln_score,0)+" "+esc(d.vuln_band||""):"—"}</span><span>${fmt(d.wbgt_c)}°C max ${fmt(d.max_c)}°C</span></div>`).join("");
+    appendChat("agent", `<strong>Morning brief ${esc(j.date)}</strong><div class="kv-table">${rows}</div>`);
+    document.querySelector('[data-act=\"ask\"]').click();
+  } catch(e) { $("status").textContent = "brief error: "+e; }
+};
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.onclick = () => {

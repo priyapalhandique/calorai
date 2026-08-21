@@ -433,6 +433,27 @@ class AuditAgent:
             threshold_c=req.threshold_c,
         )
 
+        # What-if cool-roof planner (default 0.50) — same lever as interventions[0].
+        from .analyst.schedule import work_rest_schedule
+        from .analyst.whatif import whatif_cool_roof
+
+        whatif_block = whatif_cool_roof(
+            tiles=heatmap.tiles,
+            irradiance_w_m2=irradiance,
+            surface_c=surface_c,
+            albedo_before=eff_albedo,
+            albedo_after=0.50,
+            emissivity=EMISSIVITY_DEFAULT,
+            convective_coefficient=h_c_street,
+        )
+        schedule_block = work_rest_schedule(
+            apparent_c=snapshot.env.apparent_c if snapshot.env else None,
+            wet_bulb_c=snapshot.env.wet_bulb_c if snapshot.env else None,
+            solar_w_m2=snapshot.env.solar_w_m2 if snapshot.env else None,
+            wind_m_s=wind,
+            threshold_c=req.threshold_c,
+        )
+
         report: dict[str, Any] = {
             "district": snapshot.name,
             "date": snapshot.date,
@@ -552,6 +573,8 @@ class AuditAgent:
             "elevation": elevation_block,
             "landcover": landcover_block_data,
             "synoptic": synoptic_block_data,
+            "whatif": whatif_block,
+            "schedule": schedule_block,
             # M3 (D7) — the responder's plan for this exact district/hour.
             "response": {
                 "misting": misting_plan(

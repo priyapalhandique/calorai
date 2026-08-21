@@ -11,7 +11,13 @@ it costs, and what an agent would do next.
 > deployment. The app also runs fully in mock mode, with no API key and no
 > credits spent.
 
-![AOI temperature distribution - heatmap summary](docs/images/heatmap_summary.png)
+![24h animated heatmap — Phoenix 2024-07-15, 24× hourly tcm from our cached live run (2,891 tiles, 28.6–40.6 °C)](docs/images/heatmap_24h_phoenix.gif)
+
+*Above: our 24-hour analysis — 24 single-hour tcm heatmaps stitched into an animated GIF (Phoenix, 2024-07-15, 00:00–23:00). Each frame is a real FortyGuard tile field from `data/cache` (analysis we pulled and cached ourselves, not a screenshot of the template). The southeast heat island breathes with the sun; the color scale is fixed (28.6–40.6 °C) so the diurnal pulse is honest.*
+
+![Summary card — min/mean/max swatches, histogram, and continuous colorbar from our Phoenix 14:00 audit](docs/images/heatmap_summary_phoenix.png)
+
+*The one-line summary card every use-case notebook prints — reproduced here from our own Phoenix 14:00 audit (not a copy of the template's example). Min/mean/max swatches, a colored histogram of every tile's peak, and a continuous colorbar on the same fixed scale as the GIF.*
 
 ## Judge Quick Scan
 
@@ -102,6 +108,10 @@ AuditAgent
         v
 FastAPI + UI + PDF + export + natural-language tool trace
 ```
+
+## Credit & provenance
+
+calorai was built **from** the official starter [`FortyGuard-Tech/temperature-api-quickstart`](https://github.com/FortyGuard-Tech/temperature-api-quickstart) (MIT). The `fortyguard/` client, `notebooks/00_*.ipynb` through `05_*.ipynb`, and the base parcel heatmaps in `data/` are theirs; the `calorai/` agent, physics, analyst, responder, sentinel, ML, `ui/`, `calorai_demo.ipynb`, and the 24-h GIF/card above are ours. Full split is in [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md). The GIF and summary card are our analysis, not a copy — re-rendered with our palette (`coolwarm`, fixed scale) from our cached Phoenix fields.
 
 ## Run Locally
 
@@ -264,6 +274,17 @@ parcel use cases:
 | [04_street_view_segmentation.ipynb](notebooks/04_street_view_segmentation.ipynb) | street-view segmentation |
 | [05_heat_intelligence_report.ipynb](notebooks/05_heat_intelligence_report.ipynb) | premium PDF report |
 | [calorai_demo.ipynb](notebooks/calorai_demo.ipynb) | mock-safe calorai demo |
+
+### Use calorai's layers in your own workflow
+
+The template notebooks teach the *endpoints*. calorai teaches the *audit* — combine them:
+
+- **Real-estate heat screening** → run `POST /v1/heatmap` for your AOI, then `POST /api/analysis` for that district/date; join the tile GeoJSON export (`/api/export`) with your parcel polygons to rank sites by `analysis.equity.quintile_gap_c` and `exposure.wbgt_c`.
+- **Bus-stop / shade prioritization** → fetch `GET /api/analysis?district=maryvale` (canyon + shade physics already in `physics/canyon.py`), then add your stop points; the hottest tiles on the inflow axis (`thermal_wind.ventilation_corridors`) are where shade pays most.
+- **Outdoor-work planning** → `GET /api/analysis` gives you `schedule` (24h OSHA work/rest) and `synoptic` (heat-wave/dome/fire VPD) — no extra pulls, just the diurnal series you already fetched.
+- **Evidence pack for a client** → `GET /api/report` PDF + `GET /api/export` ZIP + the summary card above — all deterministic, all citation-backed (`docs/physics-references.md`).
+
+All of the above run in **mock mode** (no key) — see `tests/conftest.py` pin — and switch to `source=live` when you add `.env`.
 
 ## What Doesn't Work Yet
 

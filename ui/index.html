@@ -55,6 +55,7 @@
       <div class="control-buttons">
         <button id="pdf" class="pill ghost" disabled>PDF report</button>
         <button id="export" class="pill ghost" disabled>Interop package</button>
+        <button id="brief" class="pill ghost">Morning brief (all districts)</button>
       </div>
       <details class="profile" id="profilePanel">
         <summary>Personal profile</summary>
@@ -148,6 +149,14 @@
       <div class="panel">
         <h2>Alerts (Sentinel R1–R7 + R8–R10)</h2>
         <div id="alertsBody" class="alerts"></div>
+      </div>
+      <div class="panel">
+        <h2>What-if cool roof (albedo 0.50 on hottest 20%)</h2>
+        <div id="whatifBody" class="kv-table"></div>
+      </div>
+      <div class="panel">
+        <h2>Work-rest schedule (24h WBGT → OSHA)</h2>
+        <div id="scheduleBody" class="kv-table"></div>
       </div>
       <div class="panel">
         <h2>Synoptic risk — heat-wave / dome / fire weather</h2>

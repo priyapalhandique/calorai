@@ -5,6 +5,7 @@ from .economy import district_cost_of_heat
 from .equity import gini, heat_burden, cross_district_leaderboard
 from .productivity import work_capacity_loss_pct, daily_hours_lost, annualized_loss
 from .landcover import landcover_block
+from .schedule import work_rest_schedule
 from .statistics import (
     describe,
     hourly_reconstruction,
@@ -13,6 +14,7 @@ from .statistics import (
     tile_statistics_block,
 )
 from .synoptic import synoptic_block
+from .whatif import whatif_cool_roof
 
 __all__ = [
     "gini",
@@ -30,4 +32,6 @@ __all__ = [
     "tile_statistics_block",
     "landcover_block",
     "synoptic_block",
+    "whatif_cool_roof",
+    "work_rest_schedule",
 ]

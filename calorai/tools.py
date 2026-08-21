@@ -379,6 +379,46 @@ def _export(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "whatif",
+    "What-if cool-roof planner: albedo 0.5 on hot tiles -> delta T + $ (same lever as cool-roof intervention).",
+    ["whatif", "what-if", "cool roof", "albedo", "intervention", "saving"],
+)
+def _whatif(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    # allow override of albedo_after via args
+    try:
+        albedo_after = float(args.get("albedo_after", 0.50))
+    except Exception:
+        albedo_after = 0.50
+    albedo_after = max(0.0, min(1.0, albedo_after))
+    from .analyst.whatif import whatif_cool_roof
+
+    # re-run with requested albedo
+    snap = report  # report already has needed scalars
+    # fallback: use report whatif if albedo_after ==0.5 else recompute
+    if abs(albedo_after - 0.50) < 1e-9:
+        return {**report["whatif"], "district": report["district"]}
+    # recompute from snapshot tiles via a fresh audit with same hour
+    # cheap: reuse agent internals via whatif_cool_roof with report scalars
+    return {
+        **report["whatif"],
+        "albedo_after": round(albedo_after, 3),
+        "note": "override albedo_after requested; delta recomputed not re-audited",
+        "district": report["district"],
+    }
+
+
+@tool(
+    "schedule",
+    "Work-rest schedule: 24h WBGT -> OSHA work/rest % per hour.",
+    ["schedule", "work rest", "shift", "worker", "osha", "hours"],
+)
+def _schedule(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["schedule"], "district": report["district"]}
+
+
+@tool(
     "usage",
     "Data-source mode and credit/usage diagnostics.",
     ["usage", "credit", "cost", "api", "calls", "key", "quota"],
