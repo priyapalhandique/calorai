@@ -238,6 +238,17 @@ def deterministic_plan(query: str, ctx: AgentContext) -> tuple[list[dict[str, An
     for step in steps[1:]:
         if "district" in steps[0]["args"]:
             step["args"]["district"] = steps[0]["args"]["district"]
+    # Web-search needs the raw query (Exa recommended request)
+    for step in steps:
+        if step["tool"] == "web_search":
+            step["args"]["query"] = query
+        if step["tool"] == "web_fetch" and "url" not in step["args"]:
+            # try to extract URL from query
+            import re as _re
+
+            m = _re.search(r"https?://[^\s]+", query)
+            if m:
+                step["args"]["url"] = m.group(0)
 
     return steps, mode
 

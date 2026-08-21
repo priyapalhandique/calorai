@@ -489,6 +489,106 @@ def _uhi(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "bus_stops",
+    "Nearest bus stops from OSM Overpass cache (free, mock-safe, no API key).",
+    ["bus stop", "bus stops", "nearest stop", "nearest", "where is", "transit", "MTA", "MBTA", "bus"],
+)
+def _bus_stops(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    import json
+    from pathlib import Path
+
+    district = (args.get("district") or ctx.district or "manhattan").lower().replace(" ", "-")
+    # try exact, then fallback to manhattan
+    for key in (district, "manhattan", "mit-campus"):
+        p = Path(f"data/bus_stops/{key}.json")
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                return {"present": True, "district": district, "stops": data.get("stops", [])[:5], "source": data.get("source", "")}
+            except Exception:
+                continue
+    return {"present": False, "district": district, "reason": "no cached bus stops"}
+
+
+@tool(
+    "web_search",
+    "Web search via Exa: semantic web retrieval with highlights (VoxMind-style nearest bus stop, cooling center, etc.).",
+    ["search", "find", "nearest", "where is", "cooling center", "shelter"],
+)
+def _web_search(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    import os
+
+    query = str(args.get("query") or args.get("q") or "").strip()
+    if not query:
+        return {"present": False, "reason": "no query"}
+    # Mock mode — never hit Exa in tests (conftest pins mock)
+    if os.getenv("CALORAI_DATA_SOURCE", "").lower() == "mock" or not os.getenv("EXA_API_KEY"):
+        # Check if we're in mock test run via the ctx source mock
+        from .data_source import resolve_source
+
+        _, mode = resolve_source(args.get("source"))
+        if mode == "mock":
+            return {"present": False, "reason": "mock mode — no web", "query": query}
+    try:
+        from exa_py import Exa
+
+        exa = Exa(api_key=os.getenv("EXA_API_KEY"))
+        # Recommended request per build-with-exa skill: query + type auto + highlights
+        res = exa.search(query, type="auto", contents={"highlights": True})
+        results = []
+        for r in (res.results or [])[:5]:
+            results.append({
+                "title": getattr(r, "title", ""),
+                "url": getattr(r, "url", ""),
+                "highlights": getattr(r, "highlights", None) or getattr(r, "highlights", []) or [],
+                "publishedDate": getattr(r, "published_date", None),
+            })
+        return {"present": True, "query": query, "results": results, "costDollars": getattr(res, "cost_dollars", None)}
+    except Exception as exc:
+        return {"present": False, "query": query, "error": str(exc)}
+
+
+@tool(
+    "web_fetch",
+    "Fetch clean page content for known URLs via Exa contents endpoint.",
+    ["fetch", "open", "read page", "summarize page"],
+)
+def _web_fetch(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    import os
+
+    url = str(args.get("url") or "").strip()
+    if not url:
+        return {"present": False, "reason": "no url"}
+    if os.getenv("CALORAI_DATA_SOURCE", "").lower() == "mock":
+        from .data_source import resolve_source
+
+        _, mode = resolve_source(args.get("source"))
+        if mode == "mock":
+            return {"present": False, "reason": "mock mode — no web", "url": url}
+    if not os.getenv("EXA_API_KEY"):
+        return {"present": False, "reason": "no EXA_API_KEY", "url": url}
+    try:
+        from exa_py import Exa
+
+        exa = Exa(api_key=os.getenv("EXA_API_KEY"))
+        # Contents endpoint: top-level highlights/text, not nested
+        res = exa.get_contents([url], highlights=True)
+        # exa-py returns object with results
+        item = (getattr(res, "results", None) or [None])[0]
+        if item is None:
+            return {"present": False, "url": url, "reason": "no content"}
+        return {
+            "present": True,
+            "url": url,
+            "title": getattr(item, "title", ""),
+            "highlights": getattr(item, "highlights", None) or [],
+            "text": (getattr(item, "text", "") or "")[:4000],
+        }
+    except Exception as exc:
+        return {"present": False, "url": url, "error": str(exc)}
+
+
+@tool(
     "usage",
     "Data-source mode and credit/usage diagnostics.",
     ["usage", "credit", "cost", "api", "calls", "key", "quota"],
