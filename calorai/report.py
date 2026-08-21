@@ -434,14 +434,15 @@ def _synoptic_chart(syn: dict[str, Any]) -> Image:
     band_color = {"low": "#4a7a5a", "moderate": "#c2600a", "high": "#a02020"}.get(band, "#4a7a5a")
     hours = list(range(len(series)))
     fig, ax = plt.subplots(figsize=(5.4, 2.4))
-    ax.bar(hours, series, width=0.85, color=band_color, edgecolor="white")
-    for th in (2.5, 4.0):
-        ax.axhline(th, color=_MPL_NAVY, ls=":", lw=0.8)
+    ax.bar(hours, series, width=0.85, color=band_color, edgecolor="white", label=f"fire-weather: {band}")
+    ax.axhline(2.5, color=_MPL_NAVY, ls=":", lw=0.8, label="moderate \u2265 2.5 kPa")
+    ax.axhline(4.0, color=_MPL_NAVY, ls=":", lw=0.8, label="high \u2265 4.0 kPa")
     ax.set_xlabel("Hour (local)", fontsize=8)
     ax.set_ylabel("VPD (kPa)", fontsize=8)
     ax.set_title(f"M \u00b7 Vapor-pressure deficit \u2014 fire-weather band {band}", fontsize=8.5, color=_MPL_NAVY)
     ax.tick_params(labelsize=7.5)
     ax.set_xlim(-0.5, len(series) - 0.5)
+    ax.legend(fontsize=7, loc="upper right")
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     return _image_from_fig(fig)
