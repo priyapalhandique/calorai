@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     audit.add_argument("--pdf", action="store_true", help="also render a PDF report to outputs/")
     audit.add_argument(
         "--export-out", metavar="DIR", default=None,
-        help="also write the Forma-friendly interop package (GeoJSON + CSVs) to DIR",
+        help="also write the open export package (GeoJSON + CSVs) to DIR",
     )
 
     sub.add_parser("serve", help="run the FastAPI web app on :8000")

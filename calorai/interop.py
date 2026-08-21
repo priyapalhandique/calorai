@@ -1,8 +1,8 @@
-"""Interop exports — Forma-friendly handoff of audit results.
+"""Interop exports — open handoff of audit results.
 
-Option A of the Autodesk-Forma plan: the audit ships as open, tool-
-agnostic files a design team can load elsewhere (Forma site context,
-building data layers, spreadsheets) without any Autodesk account:
+The audit ships as open, tool-agnostic files a design team can load
+elsewhere (GIS layers, building data layers, spreadsheets) without any
+external planning account:
 
 - ``heat_tiles_geojson``   — Point FeatureCollection of the tile layer
                              (WGS84), with threshold flags + district meta.
@@ -77,7 +77,7 @@ def heat_tiles_geojson(
 
 
 def audit_table_csv(report: dict[str, Any]) -> str:
-    """One flat row of every headline number, for spreadsheets/Forma."""
+    """One flat row of every headline number, for spreadsheets/GIS."""
     snap = report.get("snapshot", {})
     attr = report.get("attribution", {})
     exposure = report.get("exposure", {})
