@@ -462,6 +462,26 @@ class AuditAgent:
             "gradient_k_per_km": thermal_wind_block.get("gradient_k_per_km"),
             "caveat": thermal_wind_block.get("caveat"),
         }
+        # Geomorphology — landform proxy from terrain + h/w + retention
+        from .analyst.geomorphology import geomorphology_block as _geo_block
+        from .analyst.lake_effect import lake_effect_block as _lake_block
+
+        # slope/aspect/hillshade from terrain block
+        geo_block = _geo_block(
+            elevation_m=elev_m,
+            slope_deg=float(terrain_block_data.get("slope_deg", 0.0)),
+            aspect_deg=float(terrain_block_data.get("aspect_deg", 0.0)),
+            hillshade=float(terrain_block_data.get("hillshade", 0.0)),
+            h_over_w=self.district.h_over_w,
+            overnight_retention=float(retention),
+            radial_slope_c_per_km=float(((stats_block.get("radial_uhi") or {}).get("slope_c_per_km") or 0.0)),
+        )
+        lake_block = _lake_block(
+            tiles=heatmap.tiles,
+            district_lat=self.district.lat,
+            district_lon=self.district.lon,
+            district_name=self.district.name,
+        )
         # UHI prevalence — synthesized from the blocks above (no new API)
         from .analyst.uhi import uhi_prevalence_block as _uhi_block
 
@@ -590,6 +610,8 @@ class AuditAgent:
             "schedule": schedule_block,
             "terrain": terrain_block_data,
             "flight": flight_block,
+            "geomorphology": geo_block,
+            "lake_effect": lake_block,
             # M3 (D7) — the responder's plan for this exact district/hour.
             "response": {
                 "misting": misting_plan(

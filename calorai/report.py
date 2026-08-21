@@ -1076,8 +1076,42 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(_p("Weights: intensity 30 · extent 15 · distribution 20 · morphology 15 · persistence 20. Full ranking at GET /api/uhi.", st["Small"]))
         out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------ 16 provenance & warnings
-    out.append(_p("16. Provenance & warnings", st["H1"]))
+    # ------------------------------------------------ 16 geomorphology
+    geo = report.get("geomorphology", {}) or {}
+    if geo.get("present"):
+        out.append(_p("16. Geomorphology — landform, pooling vs ventilation", st["H1"]))
+        out.append(_kv_table([
+            ("Landform", geo.get("landform", "—")),
+            ("Slope / aspect / hillshade", f'{geo.get("slope_deg", "—")}° / {geo.get("aspect_deg", "—")}° / {geo.get("hillshade", "—")}'),
+            ("h/w", geo.get("h_over_w", "—")),
+            ("Cold-air pooling risk", geo.get("cold_air_pooling_risk", "—")),
+            ("Ventilated", str(geo.get("ventilated", "—"))),
+        ]))
+        caveat = geo.get("caveat")
+        if caveat: out.append(_p(caveat, st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 17 Great Lake effect
+    lake = report.get("lake_effect", {}) or {}
+    if lake.get("present"):
+        out.append(_p("17. Great Lake — lake-detected breeze + evaporative cooling lever", st["H1"]))
+        if lake.get("lake_detected"):
+            out.append(_kv_table([
+                ("Lake", lake.get("lake_name", "—")),
+                ("Lake cool ΔT (K)", lake.get("lake_cool_K", "—")),
+                ("Lake share (%)", lake.get("lake_tile_share_pct", "—")),
+                ("Breeze speed / bearing", f'{lake.get("breeze_proxy", {}).get("speed_m_s", "—")} m/s @ {lake.get("breeze_proxy", {}).get("bearing_deg", "—")}°'),
+                ("Evaporative boost", lake.get("evaporative_boost", "—")),
+                ("Cooling lever (K, diagnostic)", lake.get("cooling_lever_K", "—")),
+            ]))
+        else:
+            out.append(_p(lake.get("reason", "no lake detected"), st["Small"]))
+        caveat = lake.get("caveat")
+        if caveat: out.append(_p(caveat, st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 18 provenance & warnings
+    out.append(_p("18. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:

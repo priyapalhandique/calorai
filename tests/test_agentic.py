@@ -248,7 +248,7 @@ def test_sentinel_rule_units():
         "R1_tile_max", "R2_wbgt", "R3_exceedance", "R4_retention",
         "R5_downburst", "R6_anomaly", "R7_equity",
         "R8_heat_wave", "R9_fire_weather", "R10_landcover_deficit",
-        "R11_uhi_extreme",
+        "R11_uhi_extreme", "R12_pooling_risk", "R13_lake_breeze",
     }
 
 

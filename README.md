@@ -88,6 +88,13 @@ surrogate MAE vs tile max was 9.54 C; closed-form physics MAE was 11.74 C;
 surrogate-vs-physics MAE was 2.46 C. The gap is documented honestly as a
 skin-temperature vs canopy/tile-layer semantics boundary.
 
+## Why lakes and canyons matter (what 3D shows)
+
+- **Lake Michigan cools Chicago by ~2–3 K (diagnostic `lake_effect.cooling_lever_K`) — Vegas Strip has no such lever.** The same sun, but the lake's evaporative boost (`evaporative_fraction` + lake share ×0.15) is free cooling. Our `GET /api/uhi` ranking makes it visible: Vegas Strip 59.1 high vs Chicago 32.8 low.
+- **Canyon traps heat; valleys pool it.** Manhattan h/w 1.5 (`sky_view_factor` 0.35, `radiative_environment_c` warmer) vs Phoenix h/w 0.5 — 3D draped heat (Re:Earth terrain, no Google key, toggle 2.5D Phoenix / 3D Manhattan) lets a planner *see* why a valley-bottom + high `overnight_retention` is a pooling risk and a ridge + strong `thermal_wind.gradient_k_per_km` is ventilated. `geomorphology.landform` (Iwahashi & Pike) marks it.
+
+Both are honest proxies (breeze 0.4 m/s per K ΔT, no observed wind; landform is district-scale 3×3, not catchment hydrology) and both are mocked for zero-credit demo.
+
 ## Architecture
 
 ```text
@@ -99,14 +106,14 @@ calorai.data_source
         v
 AuditAgent
         |
-        +-- physics/     radiation, canyon, inertia, stress, mitigation
-        +-- analyst/     equity, productivity, economy, synoptic, landcover
+        +-- physics/     radiation, canyon, inertia, stress, mitigation, thermal-wind (Wallace & Hobbs Eq. 7.20), flight DA
+        +-- analyst/     equity, productivity, economy, synoptic, landcover, terrain (Re:Earth), geomorphology, lake_effect, uhi
         +-- ml/          forecast surrogate and anomaly detector
         +-- responder/   misting and heat-response plans
-        +-- sentinel/    declarative alert rules R1-R10
+        +-- sentinel/    declarative alert rules R1-R13
         |
         v
-FastAPI + UI + PDF + export + natural-language tool trace
+FastAPI + UI (MapLibre 2.5D + Cesium globe toggle, no bill) + PDF + export + natural-language tool trace
 ```
 
 ## Credit & provenance

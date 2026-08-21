@@ -507,6 +507,8 @@ function renderAnalytics() {
   renderTerrain(d.terrain || {}, d.thermal_wind || {});
   renderFlight(d.flight || {});
   renderUhi(d.uhi || {});
+  renderGeo(d.geomorphology || {});
+  renderLake(d.lake_effect || {});
 }
 
 function renderUhi(u) {
@@ -558,6 +560,32 @@ function renderFlight(f) {
     ["Gradient", f.thermal_wind_ref ? fmt(f.thermal_wind_ref.gradient_k_per_km,2)+" K/km" : "—"],
   ];
   $("flightBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") + (f.note?`<p class="hint">${esc(f.note)}</p>`:"");
+}
+
+function renderGeo(g) {
+  if (!g || !g.present) { $("geoBody").innerHTML = "<p class='hint'>geomorphology unavailable</p>"; return; }
+  const rows = [
+    ["Landform", esc(g.landform||"—")],
+    ["Slope / aspect / hillshade", `${fmt(g.slope_deg,1)}° / ${fmt(g.aspect_deg,0)}° / ${fmt(g.hillshade,3)}`],
+    ["h/w", fmt(g.h_over_w,2)],
+    ["Cold-air pooling risk", esc(g.cold_air_pooling_risk||"—")],
+    ["Ventilated", g.ventilated ? "yes" : "no"],
+  ];
+  $("geoBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("") + (g.caveat?`<p class="hint">${esc(g.caveat)}</p>`:"");
+}
+
+function renderLake(l) {
+  if (!l || !l.present) { $("lakeBody").innerHTML = "<p class='hint'>lake effect unavailable</p>"; return; }
+  if (!l.lake_detected) { $("lakeBody").innerHTML = `<p class='hint'>no lake detected — ${esc(l.reason||"land-locked")}</p>`; return; }
+  const rows = [
+    ["Lake", esc(l.lake_name||"—")],
+    ["Lake cool ΔT", fmt(l.lake_cool_K,1)+" K"],
+    ["Lake share", fmt(l.lake_tile_share_pct,1)+" %"],
+    ["Breeze", `${fmt(l.breeze_proxy.speed_m_s,1)} m/s @ ${fmt(l.breeze_proxy.bearing_deg,0)}° from ${esc(l.breeze_proxy.from_lake||"")}`],
+    ["Evaporative boost", fmt(l.evaporative_boost,3)],
+    ["Cooling lever", fmt(l.cooling_lever_K,1)+" K (diagnostic)"],
+  ];
+  $("lakeBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("") + (l.caveat?`<p class="hint">${esc(l.caveat)}</p>`:"");
 }
 
 function renderWhatif(w) {

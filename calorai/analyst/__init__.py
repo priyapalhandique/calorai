@@ -14,6 +14,8 @@ from .statistics import (
     tile_statistics_block,
 )
 from .synoptic import synoptic_block
+from .geomorphology import geomorphology_block
+from .lake_effect import lake_effect_block
 from .terrain import flight_overlay, terrain_block
 from .uhi import rank_districts, uhi_prevalence_block
 from .whatif import whatif_cool_roof
@@ -36,6 +38,8 @@ __all__ = [
     "synoptic_block",
     "terrain_block",
     "flight_overlay",
+    "geomorphology_block",
+    "lake_effect_block",
     "uhi_prevalence_block",
     "rank_districts",
     "whatif_cool_roof",

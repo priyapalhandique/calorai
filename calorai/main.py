@@ -250,6 +250,8 @@ def analysis(
         "schedule": report.get("schedule", {}),
         "terrain": report.get("terrain", {}),
         "flight": report.get("flight", {}),
+        "geomorphology": report.get("geomorphology", {}),
+        "lake_effect": report.get("lake_effect", {}),
         "uhi": report.get("uhi", {}),
         "response": report["response"],
         "analysis": report["analysis"],

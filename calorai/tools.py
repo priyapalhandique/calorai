@@ -439,6 +439,26 @@ def _flight(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "geomorphology",
+    "Geomorphology — landform, slope, cold-air pooling vs ventilation (Iwahashi & Pike, Re:Earth hillshade).",
+    ["geomorphology", "landform", "slope", "hillshade", "pooling", "valley", "ridge"],
+)
+def _geomorphology(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["geomorphology"], "district": report["district"]}
+
+
+@tool(
+    "lake_effect",
+    "Great Lake evaporative cooling — lake-detected breeze, cool K, evaporative boost lever (diagnostic).",
+    ["lake", "great lake", "lake effect", "breeze", "evaporative", "cooling lever"],
+)
+def _lake_effect(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["lake_effect"], "district": report["district"]}
+
+
+@tool(
     "uhi",
     "UHI prevalence — where is the heat island strongest and why (core, extent, distribution, morphology, persistence).",
     ["uhi", "heat island", "urban heat", "prevalence", "hottest district", "ranking"],

@@ -17,6 +17,8 @@ Rules (all thresholded on the report's own numbers):
 - R9 fire_weather  — VPD high band
 - R10 landcover    — green cover <5%
 - R11 uhi          — UHI prevalence extreme
+- R12 pooling      — cold-air pooling risk high
+- R13 lake_breeze  — lake breeze detected
 """
 
 from __future__ import annotations
@@ -111,6 +113,22 @@ ALERT_RULES: list[dict[str, Any]] = [
         "value": 65.0,
         "severity": "high",
         "message": "UHI prevalence {value:.0f}/100 — extreme island (core + persistence).",
+    },
+    {
+        "id": "R12_pooling_risk",
+        "field": ("geomorphology", "cold_air_pooling_risk"),
+        "op": "in",
+        "value": ["high"],
+        "severity": "medium",
+        "message": "Cold-air pooling risk {value} — valley traps night heat.",
+    },
+    {
+        "id": "R13_lake_breeze",
+        "field": ("lake_effect", "lake_detected"),
+        "op": "in",
+        "value": [True],
+        "severity": "low",
+        "message": "Lake breeze detected {value} — evaporative cooling lever active.",
     },
 ]
 
