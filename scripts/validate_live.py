@@ -178,7 +178,11 @@ def main() -> None:
             results.append(validate_district(d, DATE))
         except Exception as exc:  # noqa: BLE001 - report and continue
             print(f"!! {d}: {type(exc).__name__}: {exc}", flush=True)
-            raise
+            # Record the error for this district and continue so the script
+            # always writes `data/validation_live.json` instead of exiting
+            # silently when one district fails.
+            results.append({"district": d, "error": f"{type(exc).__name__}: {exc}"})
+            continue
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(results, indent=2), encoding="utf-8")
     print(f"wrote {OUT}", flush=True)
