@@ -184,6 +184,10 @@ class District:
     # Fraction of the surface that evaporates (0 dry urban fabric, 1 wet
     # vegetation/water) — scales Priestley-Taylor latent cooling.
     evaporative_fraction: float = 0.0
+    # Mean terrain elevation above sea level (m) — drives the dry-adiabatic
+    # lapse correction (6.5 K/km, ISA) so air temperatures can be compared
+    # across districts at different altitudes.
+    elevation_m: float = 0.0
 
 
 #: US districts with distinct thermal personalities — all mock-safe.
@@ -193,12 +197,14 @@ DISTRICTS: dict[str, District] = {
         base_mean_c=36.0, base_amplitude_c=8.0, heat_island_c=4.0,
         albedo=0.12, humidity_base_pct=25.0, wind_base_m_s=2.2,
         h_over_w=0.5, wall_albedo=0.20, utc_offset_hours=-7.0,
+        elevation_m=331.0,
     ),
     "san-jose": District(
         name="San Jose, CA", lat=37.3382, lon=-121.8863,
         base_mean_c=26.0, base_amplitude_c=7.0, heat_island_c=3.0,
         albedo=0.25, humidity_base_pct=45.0, wind_base_m_s=2.5,
         h_over_w=0.4, wall_albedo=0.30, utc_offset_hours=-8.0,
+        elevation_m=26.0,
     ),
     "manhattan": District(
         name="Lower Manhattan, NYC", lat=40.7110, lon=-74.0120,
@@ -206,6 +212,7 @@ DISTRICTS: dict[str, District] = {
         albedo=0.20, humidity_base_pct=60.0, wind_base_m_s=4.0,
         cloud_base_pct=35.0,
         h_over_w=1.5, wall_albedo=0.30, utc_offset_hours=-5.0,
+        elevation_m=10.0,
     ),
     "chicago": District(
         name="Chicago, IL", lat=41.8781, lon=-87.6298,
@@ -213,12 +220,14 @@ DISTRICTS: dict[str, District] = {
         albedo=0.25, humidity_base_pct=55.0, wind_base_m_s=5.0,
         cloud_base_pct=40.0,
         h_over_w=0.8, wall_albedo=0.30, utc_offset_hours=-6.0,
+        elevation_m=181.0,
     ),
     "austin": District(
         name="Austin, TX", lat=30.2672, lon=-97.7431,
         base_mean_c=33.0, base_amplitude_c=7.0, heat_island_c=3.0,
         albedo=0.18, humidity_base_pct=50.0, wind_base_m_s=3.0,
         h_over_w=0.6, wall_albedo=0.25, utc_offset_hours=-6.0,
+        elevation_m=149.0,
     ),
     # Tier 2 — subdivision deep-dive districts (hyperlocal AOIs).
     "maryvale": District(
@@ -226,6 +235,7 @@ DISTRICTS: dict[str, District] = {
         base_mean_c=37.5, base_amplitude_c=8.5, heat_island_c=5.5,
         albedo=0.10, humidity_base_pct=24.0, wind_base_m_s=2.0,
         h_over_w=0.3, wall_albedo=0.15, utc_offset_hours=-7.0,
+        elevation_m=331.0,
         # Tract-housing fabric: thin asphalt, dark roofs, low canyons —
         # the classic redlined heat-equity neighborhood profile.
         material_k_w_m_k=0.9,
@@ -239,6 +249,7 @@ DISTRICTS: dict[str, District] = {
         albedo=0.15, humidity_base_pct=15.0, wind_base_m_s=3.0,
         cloud_base_pct=5.0,
         h_over_w=1.2, wall_albedo=0.25, utc_offset_hours=-8.0,
+        elevation_m=620.0,
         # Hotel canyons + acres of parking; driest big-city sky (99% clear).
         evaporative_fraction=0.01,
     ),
@@ -248,6 +259,7 @@ DISTRICTS: dict[str, District] = {
         albedo=0.18, humidity_base_pct=62.0, wind_base_m_s=3.5,
         cloud_base_pct=35.0,
         h_over_w=1.0, wall_albedo=0.28, utc_offset_hours=-5.0,
+        elevation_m=10.0,
         # Equity contrast vs Lower Manhattan: denser, hotter, less green.
         evaporative_fraction=0.05,
     ),

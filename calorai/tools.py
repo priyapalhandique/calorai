@@ -331,6 +331,26 @@ def _aviation(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "landcover",
+    "Street-level landcover evidence: satellite + street-view segmentation (sky-view factor, shade, green cover).",
+    ["landcover", "satellite", "street view", "streetview", "sky view", "sky-view", "canopy", "green", "impervious", "shade"],
+)
+def _landcover(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["landcover"], "district": report["district"]}
+
+
+@tool(
+    "synoptic",
+    "Synoptic risk: heat-wave-day, omega-block heat dome, fire-weather VPD bands from the 24-h env series.",
+    ["synoptic", "heat wave", "heatwave", "omega", "dome", "heat dome", "fire weather", "fire risk", "vpd", "heatwave"],
+)
+def _synoptic(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["synoptic"], "district": report["district"]}
+
+
+@tool(
     "export",
     "Forma-friendly interop package: tile GeoJSON + audit CSV + interventions CSV (ZIP).",
     ["export", "download", "geojson", "csv", "forma", "interop", "package", "gis"],

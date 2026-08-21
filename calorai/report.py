@@ -425,6 +425,28 @@ def _productivity_chart(prod: dict[str, Any]) -> Image:
     return _image_from_fig(fig)
 
 
+def _synoptic_chart(syn: dict[str, Any]) -> Image:
+    """M · VPD per hour, coloured by fire-weather band."""
+    series = syn.get("vpd_series_kpa", []) or []
+    if not series:
+        return _image_from_fig(plt.figure(figsize=(5.4, 2.2)))
+    band = syn.get("fire_band", "low")
+    band_color = {"low": "#4a7a5a", "moderate": "#c2600a", "high": "#a02020"}.get(band, "#4a7a5a")
+    hours = list(range(len(series)))
+    fig, ax = plt.subplots(figsize=(5.4, 2.4))
+    ax.bar(hours, series, width=0.85, color=band_color, edgecolor="white")
+    for th in (2.5, 4.0):
+        ax.axhline(th, color=_MPL_NAVY, ls=":", lw=0.8)
+    ax.set_xlabel("Hour (local)", fontsize=8)
+    ax.set_ylabel("VPD (kPa)", fontsize=8)
+    ax.set_title(f"M \u00b7 Vapor-pressure deficit \u2014 fire-weather band {band}", fontsize=8.5, color=_MPL_NAVY)
+    ax.tick_params(labelsize=7.5)
+    ax.set_xlim(-0.5, len(series) - 0.5)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    return _image_from_fig(fig)
+
+
 def _downburst_chart(db: dict[str, Any]) -> Image:
     """I · wet-bulb depression per hour, coloured by risk band."""
     series = db.get("series", []) or []
@@ -958,8 +980,84 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(_p(verdict, st["Body"]))
     out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------ 12 provenance & warnings
-    out.append(_p("12. Provenance & warnings", st["H1"]))
+    # ------------------------------------- 12 elevation lapse correction
+    elev = report.get("elevation", {}) or {}
+    if elev.get("elevation_m") is not None:
+        out.append(_p("12. Elevation & lapse correction", st["H1"]))
+        out.append(
+            _kv_table(
+                [
+                    ("District elevation (m a.s.l.)", _fmt(elev.get("elevation_m"))),
+                    ("ISA lapse correction 6.5 K/km (°C)", _fmt(elev.get("lapse_correction_c"))),
+                    ("Air temperature, raw (°C)", _fmt(elev.get("air_raw_c"))),
+                    ("Air temperature, sea-level equivalent (°C)", _fmt(elev.get("air_sea_level_c"))),
+                ]
+            )
+        )
+        note = elev.get("note", "")
+        if note:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(note, st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------- 13 street-level landcover
+    lc = report.get("landcover", {}) or {}
+    if lc.get("present"):
+        out.append(_p("13. Street-level landcover evidence", st["H1"]))
+        out.append(
+            _kv_table(
+                [
+                    ("Parcel", lc.get("parcel", "—")),
+                    ("Sky-view factor — sky % (street)", _fmt(lc.get("svf_sky_pct"), "%")),
+                    ("Shade — tree+building % (street)", _fmt(lc.get("shade_pct"), "%")),
+                    ("Green — tree+plant % (satellite)", _fmt(lc.get("green_pct"), "%")),
+                    ("Impervious — building+ground % (satellite)", _fmt(lc.get("impervious_pct"), "%")),
+                ]
+            )
+        )
+        sat = lc.get("satellite", {}) or {}
+        sv = lc.get("streetview", {}) or {}
+        if sat.get("segments"):
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(f"Satellite segments: {sat.get('segments')}", st["Small"]))
+        if sv.get("segments"):
+            out.append(_p(f"Street-view segments: {sv.get('segments')}", st["Small"]))
+        note = lc.get("note", "")
+        if note:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(note, st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+    elif lc:
+        out.append(_p("13. Street-level landcover evidence", st["H1"]))
+        out.append(_p(lc.get("reason", "no parcel imagery for this district"), st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ---------------------------------------------------- 14 synoptic risk
+    syn = report.get("synoptic", {}) or {}
+    if syn.get("present"):
+        out.append(_p("14. Synoptic risk — heat-wave / heat dome / fire weather", st["H1"]))
+        out.append(
+            _kv_table(
+                [
+                    ("Heat-wave-day", str(syn.get("heat_wave_day", "—")) + f" ({syn.get('heat_wave_band', '')})"),
+                    ("Longest hot stretch (h ≥ threshold)", _fmt(syn.get("longest_hot_stretch_hours"))),
+                    ("Heat-dome / omega-block band", syn.get("dome_band", "—")),
+                    ("Fire-weather band (VPD)", syn.get("fire_band", "—")),
+                    ("Max VPD (kPa)", _fmt(syn.get("max_vpd_kpa"))),
+                    ("Mean VPD (kPa)", _fmt(syn.get("mean_vpd_kpa"))),
+                ]
+            )
+        )
+        caveat = syn.get("caveat", "")
+        if caveat:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p(caveat, st["Small"]))
+        out.append(Spacer(1, 0.3 * cm))
+        out.append(_synoptic_chart(syn))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 15 provenance & warnings
+    out.append(_p("15. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:

@@ -76,6 +76,30 @@ ALERT_RULES: list[dict[str, Any]] = [
         "severity": "low",
         "message": "Quintile gap {value:.1f} K — intra-district heat skew.",
     },
+    {
+        "id": "R8_heat_wave",
+        "field": ("synoptic", "heat_wave_day"),
+        "op": "in",
+        "value": [True],
+        "severity": "high",
+        "message": "Heat-wave-day signature — {value} (≥3 h above threshold).",
+    },
+    {
+        "id": "R9_fire_weather",
+        "field": ("synoptic", "fire_band"),
+        "op": "in",
+        "value": ["high"],
+        "severity": "high",
+        "message": "Fire-weather VPD {value} — dry, hot, windy proxy.",
+    },
+    {
+        "id": "R10_landcover_deficit",
+        "field": ("landcover", "green_pct"),
+        "op": "lt",
+        "value": 5.0,
+        "severity": "low",
+        "message": "Green cover {value:.1f}% — shade deficit (landcover).",
+    },
 ]
 
 
@@ -98,6 +122,8 @@ def evaluate_alerts(report: dict[str, Any]) -> dict[str, Any]:
         hit = False
         if rule["op"] == "gt":
             hit = value > rule["value"]
+        elif rule["op"] == "lt":
+            hit = value < rule["value"]
         elif rule["op"] == "in":
             hit = value in rule["value"]
         if hit:

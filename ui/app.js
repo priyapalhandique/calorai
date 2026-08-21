@@ -499,6 +499,9 @@ function renderAnalytics() {
   renderAnomalies((d.analysis && d.analysis.anomaly) || {});
   renderEquity((d.analysis && d.analysis.equity) || {});
   renderAlerts(d.alerts || []);
+  renderSynoptic(d.synoptic || {});
+  renderLandcover(d.landcover || {});
+  renderElevation(d.elevation || {});
 }
 
 function drawHistogram(st) {
@@ -656,6 +659,77 @@ function renderAlerts(alerts) {
   }
   $("alertsBody").innerHTML = alerts.map((a) =>
     `<div class="alert"><span class="sev">${esc(a.severity || "INFO")}</span> — ${esc(a.rule || "")}: ${esc(a.message || "")}</div>`).join("");
+}
+
+function renderSynoptic(syn) {
+  if (!syn || !syn.present) {
+    $("synopticBody").innerHTML = "<p class='hint'>synoptic layer unavailable — " + esc(syn && syn.reason || "no diurnal series") + "</p>";
+    return;
+  }
+  const rows = [
+    ["Heat-wave-day", `${syn.heat_wave_day ? "yes" : "no"} (${esc(syn.heat_wave_band)}) · longest stretch ${fmt(syn.longest_hot_stretch_hours, 0)} h`],
+    ["Heat-dome / omega-block", esc(syn.dome_band) + (syn.dome_detail && syn.dome_detail.clear_hot_hours != null ? ` · ${syn.dome_detail.clear_hot_hours} clear-hot hours` : "")],
+    ["Fire-weather band", `${esc(syn.fire_band)} · max VPD ${fmt(syn.max_vpd_kpa, 2)} kPa · mean ${fmt(syn.mean_vpd_kpa, 2)} kPa`],
+  ];
+  $("synopticBody").innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") +
+    (syn.caveat ? `<p class="hint">${esc(syn.caveat)}</p>` : "");
+  // VPD bar chart
+  const series = syn.vpd_series_kpa || [];
+  if (!series.length) return;
+  const c = setupCanvas("synopticChart");
+  const pad = { l: 38, r: 12, t: 16, b: 22 };
+  const plotW = c.w - pad.l - pad.r;
+  const plotH = c.h - pad.t - pad.b;
+  const maxV = Math.max(...series, 4.5);
+  c.ctx.strokeStyle = "#2a3a52"; c.ctx.lineWidth = 0.7;
+  c.ctx.beginPath(); c.ctx.moveTo(pad.l, pad.t); c.ctx.lineTo(pad.l, pad.t + plotH); c.ctx.lineTo(pad.l + plotW, pad.t + plotH); c.ctx.stroke();
+  const bandColor = { low: "#4a7a5a", moderate: "#c2600a", high: "#a02020" }[syn.fire_band] || "#4a7a5a";
+  const bw = plotW / series.length * 0.82;
+  series.forEach((v, i) => {
+    const x = pad.l + (i + 0.5) * plotW / series.length - bw / 2;
+    const h = (v / maxV) * plotH;
+    c.ctx.fillStyle = bandColor; c.ctx.fillRect(x, pad.t + plotH - h, bw, h);
+  });
+  [2.5, 4.0].forEach((th) => {
+    const y = pad.t + plotH - (th / maxV) * plotH;
+    c.ctx.strokeStyle = "#7dd3fc"; c.ctx.setLineDash([3, 3]); c.ctx.beginPath(); c.ctx.moveTo(pad.l, y); c.ctx.lineTo(pad.l + plotW, y); c.ctx.stroke(); c.ctx.setLineDash([]);
+    c.ctx.fillStyle = "#7dd3fc"; c.ctx.font = "9px sans-serif"; c.ctx.fillText(th + " kPa", pad.l + plotW - 38, y - 3);
+  });
+  c.ctx.fillStyle = "#a7b3cc"; c.ctx.font = "9px sans-serif";
+  c.ctx.fillText("Hour →", pad.l + plotW / 2 - 16, pad.t + plotH + 16);
+  c.ctx.fillText("VPD (kPa)", 4, pad.t + 10);
+}
+
+function renderLandcover(lc) {
+  if (!lc || !lc.present) {
+    $("landcoverBody").innerHTML = "<p class='hint'>" + esc(lc && lc.reason || "no parcel imagery for this district") + "</p>";
+    return;
+  }
+  const rows = [
+    ["Parcel", esc(lc.parcel || "—")],
+    ["Sky-view factor — sky % (street)", fmt(lc.svf_sky_pct, 1) + "%"],
+    ["Shade — tree+building % (street)", fmt(lc.shade_pct, 1) + "%"],
+    ["Green — tree+plant % (satellite)", fmt(lc.green_pct, 1) + "%"],
+    ["Impervious — building+ground %", fmt(lc.impervious_pct, 1) + "%"],
+  ];
+  $("landcoverBody").innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") +
+    `<p class="hint">satellite ${esc((lc.satellite && lc.satellite.file) || "")} · street-view ${esc((lc.streetview && lc.streetview.file) || "")}</p>` +
+    (lc.note ? `<p class="hint">${esc(lc.note)}</p>` : "");
+}
+
+function renderElevation(ev) {
+  if (!ev || ev.elevation_m == null) {
+    $("elevationBody").innerHTML = "<p class='hint'>elevation unavailable</p>";
+    return;
+  }
+  const rows = [
+    ["Elevation (m a.s.l.)", fmt(ev.elevation_m, 0)],
+    ["ISA lapse correction 6.5 K/km", fmt(ev.lapse_correction_c, 2) + " °C"],
+    ["Air — raw (°C)", fmt(ev.air_raw_c, 1)],
+    ["Air — sea-level equivalent (°C)", fmt(ev.air_sea_level_c, 1)],
+  ];
+  $("elevationBody").innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") +
+    (ev.note ? `<p class="hint">${esc(ev.note)}</p>` : "");
 }
 
 /* ------------------------------------------------------------------- ask */

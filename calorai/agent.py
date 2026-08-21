@@ -30,9 +30,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from .analyst import annualized_loss, district_cost_of_heat, heat_burden
+from .analyst.landcover import landcover_block
+from .analyst.statistics import tile_statistics_block
+from .analyst.synoptic import synoptic_block
 from .data_source import District, get_district, resolve_source
 from .ml.anomaly import detect_anomalies
-from .analyst.statistics import tile_statistics_block
 from .narrator import make_narrator
 from .responder import heat_response_plan, misting_plan
 from .sentinel import evaluate_alerts
@@ -406,6 +408,31 @@ class AuditAgent:
         }
         downburst_block = downburst_risk_series(env_dict) if snapshot.env else {"present": False}
 
+        # N5-c elevation lapse (6.5 K/km ISA, honest sea-level correction for cross-district comparison).
+        LAPSE_K_PER_M = 0.0065
+        elev_m = float(getattr(self.district, "elevation_m", 0.0) or 0.0)
+        lapse_c = round(elev_m * LAPSE_K_PER_M, 2)
+        elevation_block: dict[str, Any] = {
+            "elevation_m": round(elev_m, 0),
+            "lapse_correction_c": lapse_c,
+            "air_raw_c": round(air_c, 2),
+            "air_sea_level_c": round(air_c + lapse_c, 2),
+            "note": "ISA 6.5 K/km; sea-level value for inter-district comparison only — exposure uses raw air",
+        }
+
+        # N5-a street-level landcover evidence (satellite + street view, cached).
+        landcover_block_data = landcover_block(req.district)
+
+        # N5-b synoptic risk (heat-wave-day / omega-block dome / fire weather) from 24-h env series.
+        synoptic_block_data = synoptic_block(
+            apparent_c=snapshot.env.apparent_c if snapshot.env else None,
+            humidity_pct=snapshot.env.humidity_pct if snapshot.env else None,
+            solar_w_m2=snapshot.env.solar_w_m2 if snapshot.env else None,
+            cloud_cover_pct=snapshot.env.cloud_cover_pct if snapshot.env else None,
+            wbgt_c=float(exposure.get("wbgt_c", 0.0)) if exposure.get("wbgt_c") is not None else None,
+            threshold_c=req.threshold_c,
+        )
+
         report: dict[str, Any] = {
             "district": snapshot.name,
             "date": snapshot.date,
@@ -522,6 +549,9 @@ class AuditAgent:
             },
             "thermal_wind": thermal_wind_block,
             "downburst": downburst_block,
+            "elevation": elevation_block,
+            "landcover": landcover_block_data,
+            "synoptic": synoptic_block_data,
             # M3 (D7) — the responder's plan for this exact district/hour.
             "response": {
                 "misting": misting_plan(
