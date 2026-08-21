@@ -15,6 +15,7 @@ from .statistics import (
 )
 from .synoptic import synoptic_block
 from .terrain import flight_overlay, terrain_block
+from .uhi import rank_districts, uhi_prevalence_block
 from .whatif import whatif_cool_roof
 
 __all__ = [
@@ -35,6 +36,8 @@ __all__ = [
     "synoptic_block",
     "terrain_block",
     "flight_overlay",
+    "uhi_prevalence_block",
+    "rank_districts",
     "whatif_cool_roof",
     "work_rest_schedule",
 ]

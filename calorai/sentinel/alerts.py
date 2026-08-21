@@ -13,6 +13,10 @@ Rules (all thresholded on the report's own numbers):
 - R5 downburst     — downburst peak risk medium/high
 - R6 anomaly       — flagged-tile share above 10%
 - R7 equity        — quintile gap above 3 K (intra-district skew)
+- R8 heat_wave     — heat-wave-day signature
+- R9 fire_weather  — VPD high band
+- R10 landcover    — green cover <5%
+- R11 uhi          — UHI prevalence extreme
 """
 
 from __future__ import annotations
@@ -99,6 +103,14 @@ ALERT_RULES: list[dict[str, Any]] = [
         "value": 5.0,
         "severity": "low",
         "message": "Green cover {value:.1f}% — shade deficit (landcover).",
+    },
+    {
+        "id": "R11_uhi_extreme",
+        "field": ("uhi", "score"),
+        "op": "gt",
+        "value": 65.0,
+        "severity": "high",
+        "message": "UHI prevalence {value:.0f}/100 — extreme island (core + persistence).",
     },
 ]
 

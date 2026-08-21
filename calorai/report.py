@@ -1057,8 +1057,27 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(_synoptic_chart(syn))
         out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------ 15 provenance & warnings
-    out.append(_p("15. Provenance & warnings", st["H1"]))
+    # ------------------------------------------------ 15 UHI prevalence
+    uhi = report.get("uhi", {}) or {}
+    if uhi.get("present"):
+        out.append(_p("15. UHI prevalence — where is the island strongest?", st["H1"]))
+        out.append(
+            _kv_table(
+                [
+                    ("Score / band", f'{uhi.get("score", "—")}/100 — {uhi.get("band", "")}'),
+                    ("Why", uhi.get("why", "—")),
+                    ("Components (intensity/extent/dist/morph/persist)", ", ".join(f"{k} {v:.2f}" for k, v in (uhi.get("components") or {}).items())),
+                    ("Core excess / max-mean (K)", f'{uhi.get("metrics", {}).get("core_excess_k", "—")} / {uhi.get("metrics", {}).get("max_minus_mean_k", "—")}'),
+                    ("Hot-core share / gini / gap", f'{uhi.get("metrics", {}).get("hot_core_share_pct", "—")}% / {uhi.get("metrics", {}).get("gini", "—")} / {uhi.get("metrics", {}).get("quintile_gap_c", "—")} K'),
+                ]
+            )
+        )
+        out.append(Spacer(1, 0.2 * cm))
+        out.append(_p("Weights: intensity 30 · extent 15 · distribution 20 · morphology 15 · persistence 20. Full ranking at GET /api/uhi.", st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 16 provenance & warnings
+    out.append(_p("16. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:

@@ -137,6 +137,27 @@ def ask(body: AskBody) -> dict[str, Any]:
     return plan_and_run(body.query, ctx, profile=UserProfile.from_dict(body.profile))
 
 
+@app.get("/api/uhi")
+def uhi(
+    date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
+    threshold_c: float = Query(30.0),
+    source: str | None = Query(None, description="auto | mock | live"),
+) -> dict[str, Any]:
+    """UHI prevalence ranking — where is the island strongest and why."""
+    from .analyst.uhi import rank_districts
+    from .data_source import DISTRICTS
+
+    reports: list[dict[str, Any]] = []
+    for key in sorted(DISTRICTS):
+        try:
+            req = AuditRequest(district=key, date=date, hour=14, threshold_c=threshold_c, data_source=source, narrator_kind=None)
+            reports.append(AuditAgent(req).run(narrate=False))
+        except Exception as exc:
+            reports.append({"district": key, "error": str(exc)})
+    ranked = rank_districts([r for r in reports if "uhi" in r])
+    return {"date": date, "threshold_c": threshold_c, "ranked": ranked, "n_districts": len(ranked)}
+
+
 @app.get("/api/brief")
 def brief(
     date: str = Query("2026-08-18", description="YYYY-MM-DD within catalog coverage"),
@@ -229,6 +250,7 @@ def analysis(
         "schedule": report.get("schedule", {}),
         "terrain": report.get("terrain", {}),
         "flight": report.get("flight", {}),
+        "uhi": report.get("uhi", {}),
         "response": report["response"],
         "analysis": report["analysis"],
         "alerts": (report.get("alerts") or {}).get("alerts", []),

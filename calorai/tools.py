@@ -439,6 +439,24 @@ def _flight(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "uhi",
+    "UHI prevalence — where is the heat island strongest and why (core, extent, distribution, morphology, persistence).",
+    ["uhi", "heat island", "urban heat", "prevalence", "hottest district", "ranking"],
+)
+def _uhi(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    district = args.get("district")
+    if district:
+        report = ctx.report(district=district, date=args.get("date"), hour=args.get("hour"))
+        return {**report["uhi"], "district": report["district"]}
+    # no district → cross-district ranking via /api/uhi logic (mock, zero credits)
+    from .analyst.uhi import rank_districts
+
+    # reuse ctx's date/threshold
+    reports = [ctx.report(district=k) for k in sorted(__import__("calorai.data_source", fromlist=["DISTRICTS"]).DISTRICTS)]
+    return {"ranked": rank_districts(reports), "note": "cross-district UHI prevalence ranking (mock-safe)"}
+
+
+@tool(
     "usage",
     "Data-source mode and credit/usage diagnostics.",
     ["usage", "credit", "cost", "api", "calls", "key", "quota"],

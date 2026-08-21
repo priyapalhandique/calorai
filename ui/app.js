@@ -506,6 +506,19 @@ function renderAnalytics() {
   renderSchedule(d.schedule || {});
   renderTerrain(d.terrain || {}, d.thermal_wind || {});
   renderFlight(d.flight || {});
+  renderUhi(d.uhi || {});
+}
+
+function renderUhi(u) {
+  if (!u || !u.present) { $("uhiBody").innerHTML = "<p class='hint'>UHI prevalence unavailable</p>"; return; }
+  const rows = [
+    ["Score / band", `<b>${fmt(u.score,1)}/100 — ${esc(u.band)}</b> · ${esc(u.why||"")}`],
+    ["Components (0-1)", `intensity ${fmt(u.components.intensity,2)} · extent ${fmt(u.components.extent,2)} · dist ${fmt(u.components.distribution,2)} · morph ${fmt(u.components.morphology,2)} · persist ${fmt(u.components.persistence,2)}`],
+    ["Core excess / max-mean", `${fmt(u.metrics.core_excess_k,1)} K / ${fmt(u.metrics.max_minus_mean_k,1)} K`],
+    ["Hot-core share / gini / gap", `${fmt(u.metrics.hot_core_share_pct,1)}% / ${fmt(u.metrics.gini,3)} / ${fmt(u.metrics.quintile_gap_c,1)} K`],
+    ["h/w / radial slope / exceedance / retention", `${fmt(u.metrics.h_over_w,2)} / ${fmt(u.metrics.radial_slope_c_per_km,2)}°C/km / ${fmt(u.metrics.exceedance_hours,1)}h / ${fmt(u.metrics.overnight_retention,3)}`],
+  ];
+  $("uhiBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("");
 }
 
 function renderTerrain(t, tw) {

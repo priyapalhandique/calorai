@@ -462,6 +462,10 @@ class AuditAgent:
             "gradient_k_per_km": thermal_wind_block.get("gradient_k_per_km"),
             "caveat": thermal_wind_block.get("caveat"),
         }
+        # UHI prevalence — synthesized from the blocks above (no new API)
+        from .analyst.uhi import uhi_prevalence_block as _uhi_block
+
+        # report dict not yet built, so compute uhi after report assembly (see below insertion)
 
         report: dict[str, Any] = {
             "district": snapshot.name,
@@ -615,6 +619,10 @@ class AuditAgent:
             ),
             "warnings": snapshot.warnings,
         }
+        # UHI prevalence — depends on the finished report, so compute now
+        from .analyst.uhi import uhi_prevalence_block as _uhi_block
+
+        report["uhi"] = _uhi_block(report)
         # Sentinel (D7) — threshold rules over the finished report.
         report["alerts"] = evaluate_alerts(report)
         if narrate:
