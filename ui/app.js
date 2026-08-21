@@ -504,6 +504,47 @@ function renderAnalytics() {
   renderElevation(d.elevation || {});
   renderWhatif(d.whatif || {});
   renderSchedule(d.schedule || {});
+  renderTerrain(d.terrain || {}, d.thermal_wind || {});
+  renderFlight(d.flight || {});
+}
+
+function renderTerrain(t, tw) {
+  if (!t || !t.present) { $("terrainBody").innerHTML = "<p class='hint'>terrain unavailable</p>"; return; }
+  const rows = [
+    ["Renderer", esc(t.renderers ? t.renderers.join(" + ") : "—")],
+    ["Elevation (m)", fmt(t.elevation_m,0)],
+    ["Slope / aspect", `${fmt(t.slope_deg,1)}° / ${fmt(t.aspect_deg,0)}°`],
+    ["Hillshade", fmt(t.hillshade,3)],
+    ["TileJSON (MapLibre)", `<a href="${esc(t.tilejson_url)}" target="_blank" rel="noopener">Re:Earth raster-dem</a>`],
+    ["Cesium mesh", `<a href="${esc(t.cesium_url)}" target="_blank" rel="noopener">Re:Earth quantized-mesh</a>`],
+    ["Thermal wind — gradient", tw.gradient_k_per_km ? fmt(tw.gradient_k_per_km,2)+" K/km → inflow "+esc(tw.inflow_direction||"")+" "+fmt(tw.inflow_direction_deg)+"°" : "—"],
+    ["Attribution", esc(t.attribution||"")],
+  ];
+  $("terrainBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("") + (t.note?`<p class="hint">${esc(t.note)}</p>`:"");
+  // preview: tiny hillshade bar + heat drape proxy
+  const c = setupCanvas("terrainPreview");
+  const pad={l:36,r:12,t:12,b:18}; const pw=c.w-pad.l-pad.r, ph=c.h-pad.t-pad.b;
+  c.ctx.fillStyle="#0f1f3a"; c.ctx.fillRect(pad.l,pad.t,pw,ph);
+  // hillshade gradient
+  const grad=c.ctx.createLinearGradient(pad.l,0,pad.l+pw,0);
+  grad.addColorStop(0,"#16283f"); grad.addColorStop(0.5, `rgba(255,255,255,${t.hillshade})`); grad.addColorStop(1,"#c2600a");
+  c.ctx.fillStyle=grad; c.ctx.fillRect(pad.l,pad.t,pw,ph*0.55);
+  c.ctx.fillStyle="#7dd3fc"; c.ctx.font="10px sans-serif";
+  c.ctx.fillText(`Phoenix 2.5D default — toggle to Manhattan 3D`, pad.l+6, pad.t+ph-8);
+  c.ctx.fillStyle="#a7b3cc"; c.ctx.font="9px sans-serif";
+  c.ctx.fillText("heat drape = tcm tiles; terrain = Re:Earth (free, no key)", pad.l, pad.t-2);
+}
+
+function renderFlight(f) {
+  if (!f || f.density_altitude_ft==null) { $("flightBody").innerHTML = "<p class='hint'>flight overlay unavailable</p>"; return; }
+  const rows = [
+    ["ISA temp at field", fmt(f.isa_temp_c,1)+" °C"],
+    ["ΔISA (hot day)", fmt(f.delta_isa_c,1)+" K"],
+    ["Density altitude", fmt(f.density_altitude_ft,0)+" ft"],
+    ["Geostrophic ref — inflow", f.thermal_wind_ref ? esc(f.thermal_wind_ref.inflow_deg||"")+" "+fmt(f.thermal_wind_ref.inflow_deg||f.thermal_wind_ref.inflow_deg) : "—"],
+    ["Gradient", f.thermal_wind_ref ? fmt(f.thermal_wind_ref.gradient_k_per_km,2)+" K/km" : "—"],
+  ];
+  $("flightBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") + (f.note?`<p class="hint">${esc(f.note)}</p>`:"");
 }
 
 function renderWhatif(w) {
@@ -903,6 +944,8 @@ $("brief").onclick = async () => {
     document.querySelector('[data-act=\"ask\"]').click();
   } catch(e) { $("status").textContent = "brief error: "+e; }
 };
+$("modeMaplibre").onclick = () => { $("district").value="phoenix"; $("modeMaplibre").className="pill primary"; $("modeCesium").className="pill ghost"; runAudit(); };
+$("modeCesium").onclick = () => { $("district").value="manhattan"; $("modeCesium").className="pill primary"; $("modeMaplibre").className="pill ghost"; runAudit(); };
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.onclick = () => {

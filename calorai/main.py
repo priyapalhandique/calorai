@@ -227,6 +227,8 @@ def analysis(
         "synoptic": report.get("synoptic", {}),
         "whatif": report.get("whatif", {}),
         "schedule": report.get("schedule", {}),
+        "terrain": report.get("terrain", {}),
+        "flight": report.get("flight", {}),
         "response": report["response"],
         "analysis": report["analysis"],
         "alerts": (report.get("alerts") or {}).get("alerts", []),

@@ -14,6 +14,7 @@ from .statistics import (
     tile_statistics_block,
 )
 from .synoptic import synoptic_block
+from .terrain import flight_overlay, terrain_block
 from .whatif import whatif_cool_roof
 
 __all__ = [
@@ -32,6 +33,8 @@ __all__ = [
     "tile_statistics_block",
     "landcover_block",
     "synoptic_block",
+    "terrain_block",
+    "flight_overlay",
     "whatif_cool_roof",
     "work_rest_schedule",
 ]

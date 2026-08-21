@@ -435,6 +435,7 @@ class AuditAgent:
 
         # What-if cool-roof planner (default 0.50) — same lever as interventions[0].
         from .analyst.schedule import work_rest_schedule
+        from .analyst.terrain import flight_overlay, terrain_block
         from .analyst.whatif import whatif_cool_roof
 
         whatif_block = whatif_cool_roof(
@@ -453,6 +454,14 @@ class AuditAgent:
             wind_m_s=wind,
             threshold_c=req.threshold_c,
         )
+        terrain_block_data = terrain_block(district_elevation_m=elev_m, district_h_over_w=self.district.h_over_w)
+        # Flight overlay uses same elevation + air temp; thermal wind geostrophic already in thermal_wind_block
+        flight_block = flight_overlay(elevation_m=elev_m, air_temp_c=air_c)
+        flight_block["thermal_wind_ref"] = {
+            "inflow_deg": thermal_wind_block.get("inflow_direction_deg"),
+            "gradient_k_per_km": thermal_wind_block.get("gradient_k_per_km"),
+            "caveat": thermal_wind_block.get("caveat"),
+        }
 
         report: dict[str, Any] = {
             "district": snapshot.name,
@@ -575,6 +584,8 @@ class AuditAgent:
             "synoptic": synoptic_block_data,
             "whatif": whatif_block,
             "schedule": schedule_block,
+            "terrain": terrain_block_data,
+            "flight": flight_block,
             # M3 (D7) — the responder's plan for this exact district/hour.
             "response": {
                 "misting": misting_plan(

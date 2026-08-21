@@ -171,6 +171,20 @@
         <h2>Elevation & lapse correction</h2>
         <div id="elevationBody" class="kv-table"></div>
       </div>
+      <div class="panel">
+        <h2>3D terrain — Re:Earth free (toggle 2.5D Phoenix / 3D Manhattan)</h2>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button id="modeMaplibre" class="pill primary">2.5D (Phoenix)</button>
+          <button id="modeCesium" class="pill ghost">3D Globe (Manhattan)</button>
+        </div>
+        <div id="terrainBody" class="kv-table"></div>
+        <canvas id="terrainPreview" class="chart" style="height:180px"></canvas>
+        <p class="hint">MapLibre raster-dem + Cesium quantized-mesh both from https://terrain.reearth.land — no Google key. Heat drape is the FortyGuard tcm field.</p>
+      </div>
+      <div class="panel">
+        <h2>Flight overlay — ISA + density altitude + geostrophic thermal wind</h2>
+        <div id="flightBody" class="kv-table"></div>
+      </div>
     </div>
   </section>
 

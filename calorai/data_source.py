@@ -263,6 +263,16 @@ DISTRICTS: dict[str, District] = {
         # Equity contrast vs Lower Manhattan: denser, hotter, less green.
         evaporative_fraction=0.05,
     ),
+    "mit-campus": District(
+        name="MIT Campus, Cambridge", lat=42.3601, lon=-71.0942,
+        base_mean_c=27.5, base_amplitude_c=6.5, heat_island_c=3.5,
+        albedo=0.18, humidity_base_pct=58.0, wind_base_m_s=3.0,
+        cloud_base_pct=35.0,
+        h_over_w=0.9, wall_albedo=0.28, utc_offset_hours=-5.0,
+        elevation_m=4.0,
+        # Campus canyons (Stata, Killian) + Charles River flat; MIT/MBTA traffic.
+        evaporative_fraction=0.04,
+    ),
 }
 
 

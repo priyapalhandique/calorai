@@ -1,0 +1,9 @@
+﻿{
+  \"district\": \"manhattan\",
+  \"source\": \"OpenStreetMap Overpass (highway=bus_stop, 800m around 40.7110,-74.0120) — cached sample\",
+  \"stops\": [
+    {\"name\": \"Broadway & Wall St\", \"lat\": 40.7075, \"lon\": -74.0112},
+    {\"name\": \"Fulton St & Broadway\", \"lat\": 40.7101, \"lon\": -74.0095},
+    {\"name\": \"Chambers St & Broadway\", \"lat\": 40.7142, \"lon\": -74.0098}
+  ]
+}

@@ -419,6 +419,26 @@ def _schedule(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "terrain",
+    "3D terrain + hillshade: Re:Earth free terrain, slope/aspect, heat drape (2.5D Phoenix / 3D Manhattan).",
+    ["terrain", "3d", "hillshade", "slope", "elevation", "cesium", "maplibre"],
+)
+def _terrain(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["terrain"], "district": report["district"]}
+
+
+@tool(
+    "flight",
+    "Flight physics: ISA lapse, density altitude, thermal-wind geostrophic reference (Wallace & Hobbs Eq. 7.20).",
+    ["flight", "aviation", "density altitude", "geostrophic", "thermal wind", "takeoff"],
+)
+def _flight(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["flight"], "thermal_wind": report.get("thermal_wind", {}), "district": report["district"]}
+
+
+@tool(
     "usage",
     "Data-source mode and credit/usage diagnostics.",
     ["usage", "credit", "cost", "api", "calls", "key", "quota"],

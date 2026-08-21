@@ -1,0 +1,9 @@
+﻿{
+  \"district\": \"mit-campus\",
+  \"source\": \"OpenStreetMap Overpass (highway=bus_stop, 800m around 42.3601,-71.0942) — cached sample\",
+  \"stops\": [
+    {\"name\": \"Mass Ave @ MIT (77)\", \"lat\": 42.3598, \"lon\": -71.0921},
+    {\"name\": \"Vassar St @ Main St\", \"lat\": 42.3622, \"lon\": -71.0915},
+    {\"name\": \"Kendall/MIT Station\", \"lat\": 42.3625, \"lon\": -71.0862}
+  ]
+}
