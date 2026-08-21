@@ -39,11 +39,11 @@ def synoptic_block(
     if not valid:
         return {"present": False, "reason": "all apparent values None"}
 
-    # heat-wave day: >= threshold for >=3 consecutive valid hours
-    consec = cur = 0
+    # heat-wave day: >= threshold for >=3 consecutive observed hours
+    cur = 0
     best = 0
-    for _, v in valid:
-        if v >= threshold_c:
+    for v in apparent_c:
+        if v is not None and v >= threshold_c:
             cur += 1
             best = max(best, cur)
         else:
