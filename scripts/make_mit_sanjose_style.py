@@ -116,28 +116,37 @@ ax_map = fig.add_subplot(gs[0, 1])
 ax_map.set_xlim(lon0, lon1)
 ax_map.set_ylim(lat0, lat1)
 ax_map.set_aspect("equal")
-# Basemap: very light CARTO-like with faint street grid
-ax_map.set_facecolor("#f6f6f4")
-# Add faint street grid (approximate)
-# Vertical streets (lon)
-for lon in np.linspace(lon0, lon1, 8):
-    ax_map.plot([lon, lon], [lat0, lat1], color="#e8e8e6", lw=0.6, alpha=0.7, zorder=0)
-# Horizontal streets (lat)
-for lat in np.linspace(lat0, lat1, 6):
-    ax_map.plot([lon0, lon1], [lat, lat], color="#e8e8e6", lw=0.6, alpha=0.7, zorder=0)
+# Try to add real CARTO light basemap with locality names (like San Jose image)
+# Falls back to faint grid if offline
+basemap_ok = False
+try:
+    import contextily as ctx
+    # contextily expects Web Mercator, but can handle EPSG:4326 if we set it
+    # Use zoom ~14 for MIT AOI (~4km)
+    ctx.add_basemap(ax_map, crs="EPSG:4326", source=ctx.providers.CartoDB.Positron, zoom=14, attribution=False)
+    basemap_ok = True
+    print("added CARTO Positron basemap with locality names")
+except Exception as e:
+    print(f"basemap failed ({e}), using faint grid fallback")
+    ax_map.set_facecolor("#f6f6f4")
+    for lon in np.linspace(lon0, lon1, 8):
+        ax_map.plot([lon, lon], [lat0, lat1], color="#e8e8e6", lw=0.6, alpha=0.7, zorder=0)
+    for lat in np.linspace(lat0, lat1, 6):
+        ax_map.plot([lon0, lon1], [lat, lat], color="#e8e8e6", lw=0.6, alpha=0.7, zorder=0)
+    # Fallback labels
+    ax_map.text((lon0+lon1)/2, (lat0+lat1)/2, "MIT CAMPUS", fontsize=11, color="#c0c0c0", ha="center", va="center", alpha=0.5, fontweight="bold", zorder=1)
+    ax_map.text(-71.115, 42.375, "CAMBRIDGE", fontsize=8, color="#a8b5c0", ha="left", va="center", alpha=0.6, zorder=1)
+    ax_map.text(-71.07, 42.345, "CHARLES RIVER", fontsize=6, color="#a0c4d0", ha="center", va="center", style="italic", alpha=0.5, zorder=1)
+    ax_map.text(-71.065, 42.37, "KENDALL", fontsize=7, color="#b0b8c0", ha="center", va="center", alpha=0.5, zorder=1)
+    ax_map.text(-71.08, 42.365, "CENTRAL", fontsize=7, color="#b0b8c0", ha="center", va="center", alpha=0.4, zorder=1)
 # Heatmap tiles: scatter with discrete colors, as in San Jose image (square tiles, no edges, alpha)
+# Use slightly higher alpha over basemap so streets remain visible
+alpha = 0.78 if basemap_ok else 0.92
 for i in range(n_classes):
     mask = class_indices == i
     if not np.any(mask):
         continue
-    ax_map.scatter(lons[mask], lats[mask], c=[palette_hex[i]], s=6, marker="s", alpha=0.92, edgecolors="none", linewidths=0, zorder=2)
-
-# City labels (like SAN JOSE, SANTA CLARA in San Jose image)
-ax_map.text((lon0+lon1)/2, (lat0+lat1)/2, "MIT CAMPUS", fontsize=11, color="#c0c0c0", ha="center", va="center", alpha=0.5, fontweight="bold", zorder=1)
-ax_map.text(-71.115, 42.375, "CAMBRIDGE", fontsize=8, color="#a8b5c0", ha="left", va="center", alpha=0.6, zorder=1)
-ax_map.text(-71.07, 42.345, "CHARLES RIVER", fontsize=6, color="#a0c4d0", ha="center", va="center", style="italic", alpha=0.5, zorder=1)
-ax_map.text(-71.065, 42.37, "KENDALL", fontsize=7, color="#b0b8c0", ha="center", va="center", alpha=0.5, zorder=1)
-ax_map.text(-71.08, 42.365, "CENTRAL", fontsize=7, color="#b0b8c0", ha="center", va="center", alpha=0.4, zorder=1)
+    ax_map.scatter(lons[mask], lats[mask], c=[palette_hex[i]], s=4, marker="s", alpha=alpha, edgecolors="none", linewidths=0, zorder=2)
 # Top title like San Jose image
 fig.suptitle("MIT Campus AOI · daily-average temperature (24-h heatmap, 16,512 tiles)", fontsize=11, fontweight="bold", x=0.63, y=0.98, ha="center", color="#222222")
 # Bottom attribution like San Jose image
