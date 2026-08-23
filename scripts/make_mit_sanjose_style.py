@@ -140,13 +140,26 @@ except Exception as e:
     ax_map.text(-71.065, 42.37, "KENDALL", fontsize=7, color="#b0b8c0", ha="center", va="center", alpha=0.5, zorder=1)
     ax_map.text(-71.08, 42.365, "CENTRAL", fontsize=7, color="#b0b8c0", ha="center", va="center", alpha=0.4, zorder=1)
 # Heatmap tiles: scatter with discrete colors, as in San Jose image (square tiles, no edges, alpha)
-# Use slightly higher alpha over basemap so streets remain visible
-alpha = 0.78 if basemap_ok else 0.92
+# Use slightly higher alpha over basemap so streets remain visible, but low enough to keep basemap labels legible
+alpha = 0.62 if basemap_ok else 0.92
 for i in range(n_classes):
     mask = class_indices == i
     if not np.any(mask):
         continue
     ax_map.scatter(lons[mask], lats[mask], c=[palette_hex[i]], s=4, marker="s", alpha=alpha, edgecolors="none", linewidths=0, zorder=2)
+# Always add locality labels on top of heatmap (so MIT is visible even over hot tiles)
+# Use white halo for legibility over heatmap
+import matplotlib.patheffects as pe
+for txt, lon, lat, fs, col, fw in [
+    ("MIT CAMPUS", -71.0942, 42.3601, 10, "#d32f2f", "bold"),  # MIT at exact coord, red for visibility
+    ("MASSACHUSETTS", -71.09, 42.365, 9, "#222222", "bold"),
+    ("CAMBRIDGE", -71.11, 42.375, 8, "#2c3e50", "bold"),
+    ("CHARLES RIVER", -71.07, 42.355, 7, "#2980b9", "normal"),
+    ("KENDALL SQ", -71.086, 42.363, 7, "#34495e", "normal"),
+    ("BOSTON", -71.06, 42.36, 8, "#7f8c8d", "normal"),
+]:
+    ax_map.text(lon, lat, txt, fontsize=fs, color=col, ha="center", va="center", fontweight=fw, zorder=5,
+                path_effects=[pe.withStroke(linewidth=2.5, foreground="white", alpha=0.9)])
 # Top title like San Jose image
 fig.suptitle("MIT Campus AOI · daily-average temperature (24-h heatmap, 16,512 tiles)", fontsize=11, fontweight="bold", x=0.63, y=0.98, ha="center", color="#222222")
 # Bottom attribution like San Jose image
