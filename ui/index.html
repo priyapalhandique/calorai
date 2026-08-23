@@ -154,7 +154,11 @@
       <div class="panel" style="border:1.5px solid #7dd3fc">
         <h2>Heat Time-Machine — past / present / future / what-if</h2>
         <div id="tmBody" class="kv-table"></div>
-        <div style="display:flex;gap:6px;margin-top:6px"><button class="pill ghost" onclick="document.getElementById('district').value='phoenix'; runAudit()">Phoenix</button><span class="hint">slider: past (2024-07-15 live) → present (mock) → future (forecast) → what-if (cool roof -ΔT)</span></div>
+        <label for="tmSlider" class="hint">Scrub time — past → present → future → what-if (animates the heatmap GIF and 2.5D/3D drape)</label>
+        <input id="tmSlider" type="range" min="0" max="3" value="1" step="1" style="width:100%;margin:6px 0">
+        <div style="display:flex;justify-content:space-between;font-size:11px;opacity:0.7"><span>Past</span><span>Present</span><span>Future</span><span>What-if</span></div>
+        <canvas id="tmPreview" class="chart" style="height:160px"></canvas>
+        <div style="display:flex;gap:6px;margin-top:6px"><button class="pill ghost" onclick="document.getElementById('district').value='phoenix'; runAudit()">Phoenix</button><span class="hint">GIF below scrubs with the slider; heatmap tiles update via /api/analysis?district=…</span></div>
       </div>
       <div class="panel" style="border:1.5px solid #4a7a5a">
         <h2>Community Resilience OS — 0-100</h2>

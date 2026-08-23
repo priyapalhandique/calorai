@@ -524,6 +524,49 @@ function renderTimeMachine(tm){
     ["What-if cool roof ΔT", tm.whatif.albedo_0_5_delta_c!=null?fmt(tm.whatif.albedo_0_5_delta_c)+"°C":"—"],
   ];
   $("tmBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("") + `<p class="hint">${esc(tm.past.note||"")}</p>`;
+  // scrub preview + GIF sync
+  const vals = [tm.past.max_c, tm.present_block.max_c, tm.future.peak_skin_c, (tm.present_block.max_c||0)+(tm.whatif.albedo_0_5_delta_c||0)];
+  const labels = ["Past","Present","Future","What-if"];
+  function drawTmPreview(idx){
+    const c = setupCanvas("tmPreview");
+    const pad={l:36,r:12,t:12,b:22}; const pw=c.w-pad.l-pad.r, ph=c.h-pad.t-pad.b;
+    c.ctx.clearRect(0,0,c.w,c.h);
+    c.ctx.fillStyle="#0f1f3a"; c.ctx.fillRect(pad.l,pad.t,pw,ph);
+    const maxV = Math.max(...vals.filter(v=>v!=null), 1);
+    const minV = Math.min(...vals.filter(v=>v!=null), 0);
+    const span = Math.max(maxV-minV, 5);
+    vals.forEach((v,i)=>{
+      if(v==null) return;
+      const x = pad.l + (i+0.5)*pw/vals.length - pw/vals.length*0.35;
+      const bw = pw/vals.length*0.62;
+      const h = ((v-minV)/span)*ph*0.85;
+      c.ctx.fillStyle = i===idx ? "#ff8600" : (i===2 ? "#7dd3fc" : "#4a7a5a");
+      c.ctx.fillRect(x, pad.t+ph-h, bw, h);
+      c.ctx.fillStyle = i===idx ? "#fff" : "#a7b3cc";
+      c.ctx.font = i===idx ? "bold 9px sans-serif" : "9px sans-serif";
+      c.ctx.textAlign="center";
+      c.ctx.fillText(labels[i], x+bw/2, pad.t+ph+12);
+      c.ctx.fillText(fmt(v)+"°", x+bw/2, pad.t+ph-h-4);
+    });
+    // scrub GIF visual cue: overlay highlight bar opacity tied to idx
+    const gif = document.querySelector('img[src*="heatmap_24h_phoenix.gif"]');
+    if(gif){ gif.style.opacity = idx===0 ? "1" : "0.85"; gif.style.outline = idx===0 ? "2px solid #ff8600" : "none"; }
+    // also scrub the main heatmap drape (2.5D vs 3D) hint
+    const drapeHint = idx===0 ? "past live heat drape" : idx===1 ? "present mock drape" : idx===2 ? "forecast peak drape" : "what-if cool-roof drape";
+    c.ctx.fillStyle="#7dd3fc"; c.ctx.font="9px sans-serif"; c.ctx.textAlign="left";
+    c.ctx.fillText(drapeHint, pad.l, pad.t-2);
+  }
+  const slider = $("tmSlider");
+  if(slider && !slider.dataset.bound){
+    slider.dataset.bound="1";
+    slider.oninput = () => {
+      const idx = parseInt(slider.value,10);
+      drawTmPreview(idx);
+      // scrub heatmap tiles: for past/present we could re-fetch, but preview is enough for demo — keep heatmap as-is and show time-travel hint in status
+      $("status").textContent = `time-machine: ${labels[idx]} — ${vals[idx]!=null?fmt(vals[idx])+"°C":"—"} ${idx===0?"(live 2024-07-15)": idx===1?"(mock today)": idx===2?"(forecast)": "(what-if)"}`;
+    };
+  }
+  drawTmPreview(parseInt(slider.value,10)||1);
 }
 function renderResilience(r){
   if(!r||!r.present){ $("resilienceBody").innerHTML="<p class='hint'>resilience unavailable</p>"; return;}
