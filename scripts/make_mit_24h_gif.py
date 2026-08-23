@@ -45,22 +45,36 @@ for hour in range(24):
     # Clip
     vals = np.clip(vals, vmin, vmax)
 
+    # Bigger basemap with AOI inside (like San Jose image)
+    map_lon0, map_lon1 = lon0 - 0.035, lon1 + 0.035
+    map_lat0, map_lat1 = lat0 - 0.025, lat1 + 0.025
     fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=140)
-    ax.set_xlim(lon0, lon1)
-    ax.set_ylim(lat0, lat1)
+    ax.set_xlim(map_lon0, map_lon1)
+    ax.set_ylim(map_lat0, map_lat1)
     ax.set_aspect("equal")
-    # Try CARTO basemap, fallback to faint grid
+    # Try CARTO basemap, fallback to faint grid (bigger map)
     basemap_ok = False
     try:
         import contextily as ctx
-        ctx.add_basemap(ax, crs="EPSG:4326", source=ctx.providers.CartoDB.Positron, zoom=14, attribution=False)
+        ctx.add_basemap(ax, crs="EPSG:4326", source=ctx.providers.CartoDB.Positron, zoom=13, attribution=False)
         basemap_ok = True
     except Exception:
         ax.set_facecolor("#f6f6f4")
-        for lon in np.linspace(lon0, lon1, 6):
-            ax.plot([lon, lon], [lat0, lat1], color="#e8e8e6", lw=0.5, alpha=0.6, zorder=0)
-        for lat in np.linspace(lat0, lat1, 5):
-            ax.plot([lon0, lon1], [lat, lat], color="#e8e8e6", lw=0.5, alpha=0.6, zorder=0)
+        for lon in np.linspace(map_lon0, map_lon1, 8):
+            ax.plot([lon, lon], [map_lat0, map_lat1], color="#e8e8e6", lw=0.5, alpha=0.6, zorder=0)
+        for lat in np.linspace(map_lat0, map_lat1, 6):
+            ax.plot([map_lon0, map_lon1], [lat, lat], color="#e8e8e6", lw=0.5, alpha=0.6, zorder=0)
+    # AOI border
+    import matplotlib.patches as mpatches
+    ax.add_patch(mpatches.Rectangle((lon0, lat0), lon1-lon0, lat1-lat0, fill=False, edgecolor="#b0b0b0", lw=0.8, alpha=0.7, zorder=4))
+    # Locality labels (always on top, like San Jose image)
+    import matplotlib.patheffects as pe
+    for txt, lon, lat, fs, col in [
+        ("MIT CAMPUS", -71.0942, 42.3601, 7, "#d32f2f"),
+        ("CAMBRIDGE", -71.11, 42.375, 6, "#2c3e50"),
+    ]:
+        ax.text(lon, lat, txt, fontsize=fs, color=col, ha="center", va="center", fontweight="bold", zorder=5,
+                path_effects=[pe.withStroke(linewidth=1.8, foreground="white", alpha=0.9)])
     # Heat tiles as pcolormesh for speed (discrete but continuous)
     # Use lower alpha over basemap so streets locality names stay legible (user saw only Cambridge)
     sc = ax.scatter(lons_grid.ravel(), lats_grid.ravel(), c=vals.ravel(), cmap="coolwarm", vmin=vmin, vmax=vmax, s=3, marker="s", alpha=0.62 if basemap_ok else 0.92, edgecolors="none", zorder=2)
