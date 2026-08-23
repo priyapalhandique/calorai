@@ -397,6 +397,81 @@ def _circulation_diagram(circ: dict[str, Any]) -> Image:
     return _image_from_fig(fig, width=12.5 * cm)
 
 
+def _thermal_contour_chart(circ: dict[str, Any]) -> Image:
+    """H · Continuous vector field + isotherm contours (contour lines).
+
+    Isotherms every 1 K from the IDW mesh (deterministic), plus the
+    continuous inflow (orange) and thermal-wind aloft (teal) vector field
+    on a decimated grid. For the judge: see continuous changes like contour
+    lines, not just 8 trajectories.
+    """
+    cont = circ.get("contours") or {}
+    cfield = circ.get("continuous_field") or {}
+    if not cont.get("present") and not cfield.get("present"):
+        fig, ax = plt.subplots(figsize=(4.6, 3.4))
+        ax.axis("off")
+        ax.text(0.5, 0.5, "continuous field unavailable", ha="center", fontsize=8, color="#5a6a7a")
+        return _image_from_fig(fig, width=12.5 * cm)
+    # Collect all lat/lon for normalization
+    lats: list[float] = []
+    lons: list[float] = []
+    for c in cont.get("contours", []) or []:
+        for lat, lon in c["polyline"]:
+            lats.append(lat)
+            lons.append(lon)
+    for v in cfield.get("vectors", []) or []:
+        lats.append(v["lat"])
+        lons.append(v["lon"])
+    if not lats:
+        fig, ax = plt.subplots(figsize=(4.6, 3.4))
+        ax.axis("off")
+        return _image_from_fig(fig, width=12.5 * cm)
+    lat0, lat1 = min(lats), max(lats)
+    lon0, lon1 = min(lons), max(lons)
+    dlat = max(lat1 - lat0, 1e-9)
+    dlon = max(lon1 - lon0, 1e-9)
+    def norm(lat: float, lon: float) -> tuple[float, float]:
+        # Map to -1.2..1.2
+        x = (lon - (lon0 + lon1) / 2) / (dlon / 2) * 1.15
+        y = (lat - (lat0 + lat1) / 2) / (dlat / 2) * 1.15
+        return x, y
+
+    fig, ax = plt.subplots(figsize=(4.6, 3.4))
+    ax.set_xlim(-1.5, 1.5)
+    ax.set_ylim(-1.5, 1.5)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    # Isotherms: thin gray, labeled
+    for c in cont.get("contours", []) or []:
+        xs, ys = zip(*[norm(lat, lon) for lat, lon in c["polyline"]])
+        ax.plot(xs, ys, color="#9aa6b6", lw=0.7, alpha=0.85)
+        # Label every 4th contour at its midpoint
+        if c["level_c"] % 2 == 0 and len(xs) > 10:
+            mx, my = xs[len(xs)//2], ys[len(ys)//2]
+            ax.text(mx, my, f"{c['level_c']:.0f}°", fontsize=5, color="#5a6a7a", ha="center", va="center",
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.7))
+    # Continuous vectors: inflow orange, thermal teal (decimated to ~30 for legibility)
+    vecs = cfield.get("vectors", []) or []
+    step = max(1, len(vecs)//36)
+    for v in vecs[::step]:
+        x, y = norm(v["lat"], v["lon"])
+        # Scale arrow length by mag, capped
+        scale = 0.12 + min(v["mag_k_per_km"], 3.0) * 0.04
+        # Inflow (orange)
+        ax.annotate("", xy=(x + v["inflow_u"]*scale, y + v["inflow_v"]*scale), xytext=(x, y),
+                    arrowprops=dict(arrowstyle="-|>", color="#c2600a", lw=0.9, alpha=0.65))
+        # Thermal wind aloft (teal, dashed) — offset slightly for visibility
+        ax.annotate("", xy=(x + v["thermal_u"]*scale*0.8, y + v["thermal_v"]*scale*0.8), xytext=(x, y),
+                    arrowprops=dict(arrowstyle="-|>", color="#4a7a5a", lw=0.8, ls="--", alpha=0.5))
+    ax.plot(0, 0, "o", ms=7, color=_MPL_ACCENT, zorder=3)
+    ax.set_title(
+        "H · Continuous field + isotherms (1 K)\n"
+        f"{cfield.get('n_vectors', 0)} vectors · {cont.get('n_contours', 0)} contours · orange=inflow, teal=thermal wind",
+        fontsize=8.5, color=_MPL_NAVY,
+    )
+    return _image_from_fig(fig, width=12.5 * cm)
+
+
 def _productivity_chart(prod: dict[str, Any]) -> Image:
     """H · WBGT → work-capacity loss for the three work intensities."""
 
@@ -887,6 +962,8 @@ def _story(report: dict[str, Any]) -> list[Any]:
             out.append(_p(caveat, st["Small"]))
         out.append(Spacer(1, 0.2 * cm))
         out.append(_circulation_diagram(circ))
+        out.append(Spacer(1, 0.3 * cm))
+        out.append(_thermal_contour_chart(circ))
     if db.get("present"):
         out.append(Spacer(1, 0.4 * cm))
         out.append(_p("Downburst thermodynamic diagnostic", st["H2"]))

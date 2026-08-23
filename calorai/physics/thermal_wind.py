@@ -429,12 +429,131 @@ def urban_circulation(tiles: list[dict], mean_temp_c: float) -> dict[str, Any]:
             for t in corridor_tiles[:5]
         ],
         "gradient_lines": gradient_line_field(tiles),
+        "continuous_field": continuous_vector_field(tiles, n_grid=14),
+        "contours": isotherm_contours(tiles, interval_k=1.0),
         "caveat": (
             "relative circulation from the tile temperature field only; "
             "not an absolute wind forecast (the API ships no wind). "
             "Speed uses the documented UHI-circulation scale (Oke et al. "
             "2017 Ch. 4), not a momentum solve."
         ),
+    }
+
+
+def continuous_vector_field(
+    tiles: list[dict],
+    n_grid: int = 16,
+) -> dict[str, Any]:
+    """Continuous thermal-wind + inflow vector field on a regular grid.
+
+    Returns a decimated vector grid (n_grid × n_grid) with:
+    - position (lat, lon)
+    - inflow vector (toward hot core, +grad)
+    - thermal-wind vector aloft (k × grad, isotherm-parallel)
+    - magnitude (K/km) and speed scale (m/s)
+
+    For canvas contour + arrow rendering (no new API).
+    """
+    if not tiles or len(tiles) < 4:
+        return {"present": False}
+    field = _TemperatureField(tiles, n=FIELD_GRID_N)
+    grid = field.field()
+    gmin, gmax = float(grid.min()), float(grid.max())
+    # Build vector grid decimated to n_grid
+    step_i = max(1, field.n_lat // n_grid)
+    step_j = max(1, field.n_lon // n_grid)
+    vectors: list[dict[str, Any]] = []
+    for i in range(0, field.n_lat, step_i):
+        for j in range(0, field.n_lon, step_j):
+            ge, gn = field.grad_at(float(i), float(j))
+            mag = math.hypot(ge, gn)
+            if mag < 1e-9:
+                continue
+            # Normalize for direction, keep mag for color
+            ue, un = ge / mag, gn / mag
+            # Thermal wind aloft is k × grad = (-gn, ge) in (east, north)? Actually grad=(east,north), k×grad = (-north, east)
+            twe, twn = -gn / mag, ge / mag
+            lat, lon = field.latlon_of(float(i), float(j))
+            vectors.append({
+                "lat": round(lat, 6),
+                "lon": round(lon, 6),
+                "inflow_u": round(float(ue), 4),
+                "inflow_v": round(float(un), 4),
+                "thermal_u": round(float(twe), 4),
+                "thermal_v": round(float(twn), 4),
+                "mag_k_per_km": round(float(mag), 3),
+                "speed_m_s": round(float(mag * SPEED_SCALE_M_S_PER_K), 3),
+                "temp_c": round(float(field.value_at(float(i), float(j))), 2),
+            })
+    return {
+        "present": True,
+        "n_vectors": len(vectors),
+        "grid_n": n_grid,
+        "temp_range_c": [round(gmin, 2), round(gmax, 2)],
+        "vectors": vectors,
+        "caveat": "Continuous field from IDW-resampled tcm mesh; vectors follow +grad (inflow) and k×grad (thermal wind). Speed uses 0.4 m/s per K.",
+    }
+
+
+def isotherm_contours(
+    tiles: list[dict],
+    interval_k: float = 1.0,
+) -> dict[str, Any]:
+    """Contour lines (isotherms) of the temperature field.
+
+    Levels every interval_k (°C), returned as polylines in lat/lon.
+    Uses the deterministic IDW mesh; no API.
+    """
+    if not tiles or len(tiles) < 4:
+        return {"present": False}
+    field = _TemperatureField(tiles, n=FIELD_GRID_N)
+    grid = field.field()
+    gmin, gmax = float(grid.min()), float(grid.max())
+    span = gmax - gmin
+    if span < 1e-6 or interval_k <= 0:
+        return {"present": False, "reason": "flat field or bad interval"}
+    # Levels: round to interval
+    start = math.ceil(gmin / interval_k) * interval_k
+    end = math.floor(gmax / interval_k) * interval_k
+    levels: list[float] = []
+    v = start
+    while v <= end + 1e-9:
+        levels.append(round(float(v), 2))
+        v += interval_k
+    if not levels:
+        levels = [round((gmin + gmax) / 2, 2)]
+    # Use matplotlib to extract contour paths (headless)
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    # Lats increase north, lons increase east; contour expects X=lon, Y=lat
+    lons = field.lon_axis
+    lats = field.lat_axis
+    # grid is (n_lat, n_lon) with lat varying along axis 0
+    try:
+        cs = ax.contour(lons, lats, grid, levels=levels)
+    except Exception:
+        plt.close(fig)
+        return {"present": False, "reason": "contour failed"}
+    contours: list[dict[str, Any]] = []
+    for idx, lev in enumerate(cs.levels):
+        segs = cs.allsegs[idx]
+        for seg in segs:
+            if len(seg) < 2:
+                continue
+            # seg is [[lon, lat], ...]
+            poly = [[round(float(lat), 6), round(float(lon), 6)] for lon, lat in seg]
+            contours.append({"level_c": round(float(lev), 2), "polyline": poly})
+    plt.close(fig)
+    return {
+        "present": True,
+        "interval_k": interval_k,
+        "levels_c": [round(float(x), 2) for x in levels],
+        "n_contours": len(contours),
+        "contours": contours,
+        "temp_range_c": [round(gmin, 2), round(gmax, 2)],
     }
 
 

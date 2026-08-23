@@ -308,9 +308,14 @@ function drawCirculation() {
   const lines = gl.lines || [];
   const core = gl.core;
   const pad = 44;
+  const cont = tw.contours || {};
+  const cfield = tw.continuous_field || {};
   let pts = [];
   for (const ln of lines) for (const p of ln.path) pts.push(p);
   if (core) pts.push([core.lat, core.lon]);
+  // Include contour + vector extents so they are not clipped
+  for (const c of (cont.contours || [])) for (const p of c.polyline) pts.push(p);
+  for (const v of (cfield.vectors || [])) pts.push([v.lat, v.lon]);
   const note = $("circNote");
   if (!pts.length) {
     note.textContent = "no trajectories";
@@ -347,6 +352,49 @@ function drawCirculation() {
     }
     ctx.globalAlpha = 1;
   }
+  // Isotherm contours (thin gray, labeled every 2 K)
+  for (const c of (cont.contours || [])) {
+    if (c.polyline.length < 2) continue;
+    ctx.strokeStyle = "rgba(154,166,182,0.95)";
+    ctx.lineWidth = 0.85;
+    ctx.beginPath();
+    c.polyline.forEach((p, i) => { const x = X(p[1]), y = Y(p[0]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    if (c.level_c % 2 === 0 && c.polyline.length > 10) {
+      const mid = c.polyline[Math.floor(c.polyline.length/2)];
+      const x = X(mid[1]), y = Y(mid[0]);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillRect(x-14, y-7, 28, 11);
+      ctx.fillStyle = "#5a6a7a";
+      ctx.font = "7px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`${c.level_c}°`, x, y+2);
+      ctx.textAlign = "left";
+    }
+  }
+  // Continuous vector field: inflow orange, thermal teal (decimated)
+  const vecs = cfield.vectors || [];
+  const step = Math.max(1, Math.floor(vecs.length/42));
+  for (let i=0; i<vecs.length; i+=step) {
+    const v = vecs[i];
+    const x = X(v.lon), y = Y(v.lat);
+    const mag = Math.min(v.mag_k_per_km, 3.0);
+    const len = 6 + mag*4;
+    // inflow (toward core, orange solid)
+    const inflowLen = len;
+    const ix = x + v.inflow_u * inflowLen;
+    const iy = y - v.inflow_v * inflowLen;
+    ctx.strokeStyle = "rgba(255,134,0,0.72)";
+    ctx.lineWidth = 1.0;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ix, iy); ctx.stroke();
+    // thermal wind aloft (teal dashed)
+    const tx = x + v.thermal_u * len * 0.75;
+    const ty = y - v.thermal_v * len * 0.75;
+    ctx.setLineDash([2,2]);
+    ctx.strokeStyle = "rgba(76,217,141,0.55)";
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.setLineDash([]);
+  }
   if (core) {
     const cx = X(core.lon), cy = Y(core.lat);
     ctx.fillStyle = "#ff8600";
@@ -366,13 +414,15 @@ function drawCirculation() {
   if (twDeg !== undefined) {
     arrow(ctx, w * 0.84, h * 0.22, twDeg, 34, "#4cd98d", 2.2, true);
   }
-  note.textContent = `${lines.length} gradient lines · inflow ${tw.inflow_direction || "uniform"} · Δp ${fmt(tw.pressure_deficit_hpa, 2)} hPa`;
+  note.textContent = `${lines.length} gradient lines · ${cont.n_contours ?? 0} isotherms (1 K) · ${cfield.n_vectors ?? 0} vectors · inflow ${tw.inflow_direction || "uniform"} · Δp ${fmt(tw.pressure_deficit_hpa, 2)} hPa`;
   $("circKv").innerHTML = [
     ["Inflow speed scale", `${fmt(tw.inflow_speed_scale_m_s, 2)} m/s`],
     ["Core excess vs district mean", `${fmt(tw.core_excess_k, 2)} K`],
     ["Ventilation corridors", String(tw.ventilation_corridors ?? "—")],
     ["Thermal wind aloft", `${fmt(twDeg)}° (warm air right, NH)`],
     ["Gradient", `${fmt(tw.gradient_k_per_km, 2)} K/km`],
+    ["Isotherms", `${cont.n_contours ?? 0} contours · ${cont.interval_k ?? 1} K`],
+    ["Continuous field", `${cfield.n_vectors ?? 0} vectors · orange=inflow, teal=thermal`],
   ].map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("");
 }
 
