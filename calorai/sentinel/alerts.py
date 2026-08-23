@@ -19,6 +19,8 @@ Rules (all thresholded on the report's own numbers):
 - R11 uhi          — UHI prevalence extreme
 - R12 pooling      — cold-air pooling risk high
 - R13 lake_breeze  — lake breeze detected
+- R14 pollutant    — worst pollutant unhealthy band
+- R15 industrial   — industrial heatwave land-use
 """
 
 from __future__ import annotations
@@ -129,6 +131,22 @@ ALERT_RULES: list[dict[str, Any]] = [
         "value": [True],
         "severity": "low",
         "message": "Lake breeze detected {value} — evaporative cooling lever active.",
+    },
+    {
+        "id": "R14_pollutant_worst",
+        "field": ("pollutants", "worst", "band"),
+        "op": "in",
+        "value": ["unhealthy", "very unhealthy", "unhealthy for sensitive"],
+        "severity": "high",
+        "message": "Pollutant {value} — heat-driven {value} (O3/PM2.5).",
+    },
+    {
+        "id": "R15_industrial_heatwave",
+        "field": ("heatwave_landuse", "is_industrial"),
+        "op": "in",
+        "value": [True],
+        "severity": "medium",
+        "message": "Industrial heatwave land-use {value} — worker + grid risk.",
     },
 ]
 

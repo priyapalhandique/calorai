@@ -19,6 +19,10 @@ it costs, and what an agent would do next.
 
 *The one-line summary card every use-case notebook prints — reproduced here from our own Phoenix 14:00 audit (not a copy of the template's example). Min/mean/max swatches, a colored histogram of every tile's peak, and a continuous colorbar on the same fixed scale as the GIF.*
 
+![Teaser — 3D terrain MIT campus with heat drape + thermal wind animation (24 frames, Re:Earth free)](docs/images/teaser_mit_3d.gif)
+
+*Teaser video — 3D terrain around MIT Campus (42.3601,-71.0942) with heat drape (coolwarm, 31–33 °C) and thermal-wind vectors (Wallace & Hobbs Eq. 7.20, geostrophic offset). 24 rotating frames stitch the collected data: 3D MIT terrain (hillshade) + thermal-wind inflow toward the hot core + all capabilities (terrain + flight DA + UHI + pollutants). Also in `docs/videos/teaser.gif` (MP4 fallback). No Google key, Re:Earth terrain, our analysis.*
+
 ## Judge Quick Scan
 
 | Item | Where |

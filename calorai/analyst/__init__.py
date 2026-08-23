@@ -17,7 +17,9 @@ from .synoptic import synoptic_block
 from .carbon import carbon_block
 from .citizen import mesh as citizen_mesh, report_heat as citizen_report
 from .geomorphology import geomorphology_block
+from .heatwave_landuse import heatwave_landuse_block
 from .lake_effect import lake_effect_block
+from .pollutants import pollutants_block
 from .resilience import resilience_block
 from .terrain import flight_overlay, terrain_block
 from .time_machine import time_machine_block
@@ -49,6 +51,10 @@ __all__ = [
     "carbon_block",
     "citizen_mesh",
     "citizen_report",
+    "geomorphology_block",
+    "heatwave_landuse_block",
+    "lake_effect_block",
+    "pollutants_block",
     "resilience_block",
     "time_machine_block",
     "whatif_cool_roof",

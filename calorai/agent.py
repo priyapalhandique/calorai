@@ -658,11 +658,15 @@ class AuditAgent:
             "warnings": snapshot.warnings,
         }
         # UHI prevalence — depends on the finished report, so compute now
-        from .analyst.uhi import uhi_prevalence_block as _uhi_block
+        from .analyst.heatwave_landuse import heatwave_landuse_block as _hw_block
+        from .analyst.pollutants import pollutants_block as _poll_block
         from .analyst.resilience import resilience_block as _res_block
+        from .analyst.uhi import uhi_prevalence_block as _uhi_block
 
         report["uhi"] = _uhi_block(report)
         report["resilience"] = _res_block(report)
+        report["heatwave_landuse"] = _hw_block(report)
+        report["pollutants"] = _poll_block(report)
         # Sentinel (D7) — threshold rules over the finished report.
         report["alerts"] = evaluate_alerts(report)
         if narrate:

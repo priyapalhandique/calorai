@@ -513,6 +513,8 @@ function renderAnalytics() {
   renderResilience(d.resilience || {});
   renderCarbon(d.carbon || {});
   renderCitizen(d.citizen || {});
+  renderHeatwave(d.heatwave_landuse || {});
+  renderPollutants(d.pollutants || {});
 }
 
 function renderTimeMachine(tm){
@@ -589,6 +591,30 @@ function renderCarbon(c){
 function renderCitizen(ci){
   if(!ci||!ci.present){ $("citizenBody").innerHTML="<p class='hint'>no citizen reports — tap 'Report heat here' above</p>"; return;}
   $("citizenBody").innerHTML = `<div><span>Reports</span><b>${ci.n_reports}</b></div>` + (ci.reports && ci.reports.length? `<p class="hint">${esc(ci.reports.slice(-3).map(r=>r.district+':'+r.note).join(' · '))}</p>` : "");
+}
+
+function renderHeatwave(hw){
+  if(!hw||!hw.present){ $("heatwaveBody").innerHTML="<p class='hint'>heatwave analysis unavailable</p>"; return;}
+  const rows=[
+    ["Land-use", esc(hw.landuse||"—") + (hw.is_residential?" (residential)":" (industrial)")],
+    ["Max / WBGT / Vuln", `${fmt(hw.metrics.max_c)}°C / ${fmt(hw.metrics.wbgt_c)}°C / ${hw.metrics.vuln_band||"—"}`],
+    ["Equity gap / hot-core", `${fmt(hw.metrics.quintile_gap_c,1)} K / ${fmt(hw.metrics.hot_core_share_pct,1)}%`],
+  ];
+  const eff = hw.effects || {};
+  $("heatwaveBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("") + Object.entries(eff).map(([k,v])=>`<p class="hint"><b>${esc(k)}:</b> ${esc(v)}</p>`).join("") + (hw.note?`<p class="hint">${esc(hw.note)}</p>`:"");
+}
+
+function renderPollutants(po){
+  if(!po||!po.present){ $("pollutantsBody").innerHTML="<p class='hint'>pollutant analysis unavailable</p>"; return;}
+  const p = po.pollutants || {};
+  const rows=[
+    ["O₃", `${fmt(p.o3_ppb,1)} ppb — ${esc(p.o3_band||"")}`],
+    ["NO₂", `${fmt(p.no2_ppb,1)} ppb — ${esc(p.no2_band||"")}`],
+    ["PM2.5", `${fmt(p.pm25_ug_m3,1)} µg/m³ — ${esc(p.pm25_band||"")}`],
+    ["SO₂", `${fmt(p.so2_ppb,1)} ppb`],
+    ["Worst", po.worst ? `${esc(po.worst.pollutant)} ${fmt(po.worst.value,1)} — ${esc(po.worst.band)}` : "—"],
+  ];
+  $("pollutantsBody").innerHTML = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("") + (po.advisory?`<p class="hint">${esc(po.advisory)}</p>`:"") + (po.caveat?`<p class="hint">${esc(po.caveat)}</p>`:"");
 }
 
 function renderUhi(u) {

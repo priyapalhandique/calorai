@@ -299,6 +299,8 @@ def analysis(
         "carbon": report.get("carbon", {}),
         "citizen": report.get("citizen", {}),
         "resilience": report.get("resilience", {}),
+        "heatwave_landuse": report.get("heatwave_landuse", {}),
+        "pollutants": report.get("pollutants", {}),
         "uhi": report.get("uhi", {}),
         "response": report["response"],
         "analysis": report["analysis"],

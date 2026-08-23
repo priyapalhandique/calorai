@@ -501,6 +501,26 @@ def _carbon(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "heatwave_landuse",
+    "Heatwave residential vs industrial — where heat hits housing vs factories differently.",
+    ["residential", "industrial", "landuse", "housing", "factory", "heatwave"],
+)
+def _heatwave_landuse(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["heatwave_landuse"], "district": report["district"]}
+
+
+@tool(
+    "pollutants",
+    "Industrial pollutants from heat signatures — O3, NO2, PM2.5, SO2 proxy (heat + sun + canyon trapping).",
+    ["pollutant", "chemical", "ozone", "O3", "NO2", "PM2.5", "industrial", "emission"],
+)
+def _pollutants(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["pollutants"], "district": report["district"]}
+
+
+@tool(
     "citizen",
     "Citizen Heat Mesh — crowdsourced heat reports (text HEAT, geolocation → 3D dot).",
     ["citizen", "mesh", "report heat", "crowdsource", "dot", "HEAT"],

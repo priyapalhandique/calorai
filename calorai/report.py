@@ -1154,8 +1154,38 @@ def _story(report: dict[str, Any]) -> list[Any]:
         ]))
         out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------ 22 provenance & warnings
-    out.append(_p("22. Provenance & warnings", st["H1"]))
+    # ------------------------------------------------ 22 Heatwave — residential vs industrial
+    hw = report.get("heatwave_landuse", {}) or {}
+    if hw.get("present"):
+        out.append(_p("22. Heatwave — residential vs industrial", st["H1"]))
+        out.append(_kv_table([
+            ("Land-use", hw.get("landuse", "—")),
+            ("Residential / Industrial", f'{hw.get("is_residential", "—")} / {hw.get("is_industrial", "—")}'),
+            ("Max / WBGT", f'{hw.get("metrics", {}).get("max_c", "—")} / {hw.get("metrics", {}).get("wbgt_c", "—")}'),
+        ]))
+        eff = hw.get("effects", {}) or {}
+        for k,v in eff.items():
+            out.append(_p(f"{k}: {v}", st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 23 Chemical — industrial pollutants from heat signatures
+    po = report.get("pollutants", {}) or {}
+    if po.get("present"):
+        out.append(_p("23. Chemical — industrial pollutants from heat signatures", st["H1"]))
+        poll = po.get("pollutants", {}) or {}
+        out.append(_kv_table([
+            ("O₃ (ppb / band)", f'{poll.get("o3_ppb", "—")} / {poll.get("o3_band", "—")}'),
+            ("NO₂ (ppb / band)", f'{poll.get("no2_ppb", "—")} / {poll.get("no2_band", "—")}'),
+            ("PM2.5 (µg/m³ / band)", f'{poll.get("pm25_ug_m3", "—")} / {poll.get("pm25_band", "—")}'),
+            ("SO₂ (ppb)", poll.get("so2_ppb", "—")),
+            ("Worst", f'{po.get("worst", {}).get("pollutant", "—")} {po.get("worst", {}).get("value", "—")} — {po.get("worst", {}).get("band", "—")}'),
+        ]))
+        if po.get("advisory"): out.append(_p(po["advisory"], st["Body"]))
+        if po.get("caveat"): out.append(_p(po["caveat"], st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 24 provenance & warnings
+    out.append(_p("24. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:
