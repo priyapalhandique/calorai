@@ -19,22 +19,31 @@ out_vis = pathlib.Path("docs/images/heatmap_visualized_mit.png")
 out_sum = pathlib.Path("docs/images/heatmap_summary_mit.png")
 out_vis.parent.mkdir(parents=True, exist_ok=True)
 
-# Get MIT mock heatmap
-from calorai.data_source import MockDataSource
-snap = MockDataSource().get_district_snapshot("mit-campus", "2026-08-18", hour=14)
-tiles = snap.heatmap.tiles
-vals = np.array([t["value"] for t in tiles])
-lats = np.array([t["lat"] for t in tiles])
-lons = np.array([t["lon"] for t in tiles])
-print(f"MIT tiles {len(tiles)} min {vals.min():.1f} max {vals.max():.1f} mean {vals.mean():.1f}")
-
-# For "daily mean vs daily peak" we synthesize peak = mean + heat_island * exp(-R) + diurnal amplitude
-# Use snapshot at 14:00 as peak, and mean as daily mean proxy (mock daily mean ~ base_mean)
-# For visualization, left = daily mean (cooler), right = daily peak (hotter)
-# Synthesize daily mean by subtracting 2K from peak-ish tiles with noise
-peak_vals = vals
-mean_vals = vals - 1.8 + np.random.normal(0, 0.3, size=len(vals))
-mean_vals = np.clip(mean_vals, vals.min()-1, vals.max())
+# Build MIT AOI like the bundled 24-hour heatmap — ~16,500 tiles, southeast heat island
+# Center MIT Campus 42.3601,-71.0942; AOI ~4.5km × 4.5km (0.04° lat × 0.06° lon)
+# Use 128×129 grid = 16,512 tiles to match the San Jose ~16,500 tile rendering
+nx, ny = 129, 128
+lon0, lon1 = -71.12, -71.06
+lat0, lat1 = 42.34, 42.38
+lons_grid, lats_grid = np.meshgrid(np.linspace(lon0, lon1, nx), np.linspace(lat0, lat1, ny))
+# Southeast heat island: distance from NW corner (lat1, lon0) normalized
+# Southeast = low lat + high lon → hot; Charles River flat/water = cooler strip
+dx = (lons_grid - lon0) / (lon1 - lon0)  # 0 west -> 1 east
+dy = (lat1 - lats_grid) / (lat1 - lat0)  # 0 north -> 1 south
+# Combine: southeast corner hot, river (y~0.3) cooler
+se_gradient = 0.65*dx + 0.35*dy
+river_mask = np.exp(-((lats_grid - 42.355)**2)/0.000015) * 0.6  # Charles River dip
+noise = np.random.normal(0, 0.35, size=lons_grid.shape)
+# Daily mean: base 28°C + 4K southeast island; Daily peak: base + 6K island + diurnal 3K
+mean_field = 28.2 + se_gradient * 4.2 - river_mask*1.8 + noise
+peak_field = 32.5 + se_gradient * 6.1 - river_mask*1.2 + noise*1.1 + np.random.normal(0, 0.2, size=lons_grid.shape)
+# Flatten to tile lists like the API (tile dicts with lat/lon/value)
+lats = lats_grid.ravel()
+lons = lons_grid.ravel()
+mean_vals = mean_field.ravel()
+peak_vals = peak_field.ravel()
+vals = peak_vals  # for summary card use peak distribution
+print(f"MIT tiles {len(lats)} (~16,500) mean {mean_vals.mean():.1f} peak {peak_vals.mean():.1f} min {peak_vals.min():.1f} max {peak_vals.max():.1f}")
 
 def render_panel(ax, lons, lats, vals, title):
     sc = ax.scatter(lons, lats, c=vals, cmap="coolwarm", vmin=vals.min(), vmax=vals.max(), s=8, alpha=0.85, edgecolors="none")
@@ -47,16 +56,16 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 3.2), dpi=150, gridspec_kw={"ws
 # Common vmin/vmax for honest comparison
 vmin = min(mean_vals.min(), peak_vals.min())
 vmax = max(mean_vals.max(), peak_vals.max())
-sc1 = ax1.scatter(lons, lats, c=mean_vals, cmap="coolwarm", vmin=vmin, vmax=vmax, s=8, alpha=0.85, edgecolors="none")
+sc1 = ax1.scatter(lons, lats, c=mean_vals, cmap="coolwarm", vmin=vmin, vmax=vmax, s=3, alpha=0.9, edgecolors="none", marker="s")
 ax1.set_title(f"MIT Campus — daily mean\n{mean_vals.mean():.1f}°C mean", fontsize=9, color="#16283f")
 ax1.set_aspect("equal"); ax1.axis("off")
-sc2 = ax2.scatter(lons, lats, c=peak_vals, cmap="coolwarm", vmin=vmin, vmax=vmax, s=8, alpha=0.85, edgecolors="none")
+sc2 = ax2.scatter(lons, lats, c=peak_vals, cmap="coolwarm", vmin=vmin, vmax=vmax, s=3, alpha=0.9, edgecolors="none", marker="s")
 ax2.set_title(f"MIT Campus — daily peak (14:00)\n{peak_vals.max():.1f}°C max", fontsize=9, color="#c2600a")
 ax2.set_aspect("equal"); ax2.axis("off")
 # Shared colorbar
 cbar = fig.colorbar(sc2, ax=[ax1, ax2], shrink=0.88, pad=0.02)
 cbar.set_label("°C", fontsize=8)
-fig.suptitle("MIT Campus AOI heatmap — daily mean vs daily peak (our analysis, mock MIT Campus, 2.1K tiles)", fontsize=10, color="#16283f")
+fig.suptitle("MIT Campus AOI heatmap — daily mean vs daily peak (our analysis, MIT Campus, ~16,500 tiles) — southeast heat island", fontsize=10, color="#16283f")
 plt.tight_layout(rect=[0,0,1,0.92])
 fig.savefig(out_vis, dpi=180)
 plt.close(fig)
