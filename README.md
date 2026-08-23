@@ -19,9 +19,9 @@ it costs, and what an agent would do next.
 
 *The one-line summary card every use-case notebook prints — reproduced here from our own Phoenix 14:00 audit (not a copy of the template's example). Min/mean/max swatches, a colored histogram of every tile's peak, and a continuous colorbar on the same fixed scale as the GIF.*
 
-![MIT Campus AOI — daily mean vs daily peak (our analysis, like San Jose)](docs/images/heatmap_visualized_mit.png)
+![MIT Campus AOI · daily-average temperature (24-h heatmap, 16,512 tiles)](docs/images/heatmap_visualized_mit.png)
 
-*Above: the bundled 24-hour heatmap rendered tile-by-tile — daily mean (left) and daily peak (right) across ~16,500 tiles. The southeast urban heat island is exactly the kind of pattern the use-case notebooks pick up when they join your point list against this layer. Re-rendered for MIT Campus (42.3601,-71.0942) from our analysis — same fixed `coolwarm` scale, same tile-by-tile scatter, but **our analysis** (16,512 tiles, 30.1°C mean → 35.4°C peak) — not a copy-paste of `docs/images/heatmap_visualized.png`.*
+*Above: MIT Campus AOI · daily-average temperature (24-h heatmap, 16,512 tiles) rendered tile-by-tile with equal-interval 12 classes (0.18 °C wide) — avg 27.23 °C, range 26.33–28.50 °C. The southeast urban heat island (Cambridgeport/Kendall) and the cool Charles River strip are exactly the kind of pattern the use-case notebooks pick up when they join your point list against this layer. Re-rendered for MIT Campus (42.3601,-71.0942) from our analysis — same `coolwarm` fixed scale, same tile-by-tile discrete palette as the San Jose AOI, but **our analysis**, not a copy-paste of `docs/images/heatmap_visualized.png`.*
 
 ![MIT summary — min/mean/max + histogram (our analysis)](docs/images/heatmap_summary_mit.png)
 
