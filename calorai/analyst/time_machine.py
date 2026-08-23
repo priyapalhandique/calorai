@@ -15,16 +15,29 @@ from typing import Any
 from ..data_source import DISTRICTS
 
 
-def time_machine_block(district: str = "phoenix", date: str = "2026-08-18") -> dict[str, Any]:
-    # Present: mock audit at 14:00
-    from ..agent import AuditAgent, AuditRequest
+def time_machine_block(
+    district: str = "phoenix",
+    date: str = "2026-08-18",
+    present_max: float | None = None,
+    present_series: list[float | None] | None = None,
+    whatif_delta: float | None = None,
+) -> dict[str, Any]:
+    # Present: prefer values passed in by the outer audit (avoids recursion). Fallback to a nested
+    # mock audit for standalone calls (tests, /api/time_machine without present data).
+    if present_series is None and present_max is None and whatif_delta is None:
+        try:
+            from ..agent import AuditAgent, AuditRequest
 
-    try:
-        present = AuditAgent(AuditRequest(district=district, date=date, hour=14, data_source="mock")).run(narrate=False)
-        present_series = (present.get("diurnal", {}) or {}).get("apparent_c", []) or []
-        present_max = present.get("snapshot", {}).get("max_c")
-    except Exception:
-        present_series, present_max = [], None
+            present = AuditAgent(AuditRequest(district=district, date=date, hour=14, data_source="mock")).run(narrate=False)
+            present_series = (present.get("diurnal", {}) or {}).get("apparent_c", []) or []
+            present_max = present.get("snapshot", {}).get("max_c")
+            whatif_delta = (present.get("whatif", {}) or {}).get("delta_t_c")
+        except Exception:
+            present_series = []
+            present_max = None
+            whatif_delta = None
+    if present_series is None:
+        present_series = []
 
     # Past: try cached live Phoenix 2024-07-15 env apparent series (no live call, read cache if present)
     past_series: list[float | None] = []
@@ -60,13 +73,7 @@ def time_machine_block(district: str = "phoenix", date: str = "2026-08-18") -> d
     except Exception:
         future_peak = None
 
-    # What-if: cool roof delta
-    whatif_delta = None
-    try:
-        whatif_delta = present.get("whatif", {}).get("delta_t_c")
-    except Exception:
-        pass
-
+    # whatif_delta is supplied by caller (whatif_block); no nested audit here.
     return {
         "present": True,
         "district": district,

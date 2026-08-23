@@ -484,7 +484,13 @@ class AuditAgent:
             district_lon=self.district.lon,
             district_name=self.district.name,
         )
-        time_machine_block = _tm_block(district=req.district, date=req.date)
+        time_machine_block = _tm_block(
+            district=req.district,
+            date=req.date,
+            present_max=float(heatmap.max) if heatmap else None,
+            present_series=list(snapshot.env.apparent_c) if snapshot.env and getattr(snapshot.env, "apparent_c", None) else [],
+            whatif_delta=whatif_block.get("delta_t_c"),
+        )
         carbon_block_data = _carbon_block(delta_t_c=whatif_block.get("delta_t_c"), district=req.district)
         from .analyst.citizen import mesh as _citizen_mesh
 
