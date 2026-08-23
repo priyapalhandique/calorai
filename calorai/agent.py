@@ -484,6 +484,18 @@ class AuditAgent:
             district_lon=self.district.lon,
             district_name=self.district.name,
         )
+        # Wind corridors — city square ventilation, Forma wind-analysis style (rapid AI + proposals)
+        from .analyst.wind_corridor import wind_corridor_block as _wc_block
+
+        sv = (landcover_block_data.get("streetview", {}) or {}).get("segments", {}) if landcover_block_data.get("present") else {}
+        sat = (landcover_block_data.get("satellite", {}) or {}).get("segments", {}) if landcover_block_data.get("present") else {}
+        wind_corridor_block_data = _wc_block(
+            thermal_wind=thermal_wind_block,
+            h_over_w=self.district.h_over_w,
+            tree_pct=float(sv.get("tree", 0.0)) if sv else None,
+            building_pct=float(sat.get("building", 0.0)) if sat else None,
+            sky_pct=float(sv.get("sky", 0.0)) if sv else None,
+        )
         time_machine_block = _tm_block(
             district=req.district,
             date=req.date,
@@ -625,6 +637,7 @@ class AuditAgent:
             "flight": flight_block,
             "geomorphology": geo_block,
             "lake_effect": lake_block,
+            "wind_corridor": wind_corridor_block_data,
             "time_machine": time_machine_block,
             "carbon": carbon_block_data,
             "citizen": citizen_block,

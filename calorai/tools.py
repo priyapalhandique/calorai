@@ -471,6 +471,16 @@ def _lake_effect(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(
+    "wind_corridor",
+    "Wind corridors — city square ventilation, Forma-style comfort vs direction, streamlines, proposals (wall, trees).",
+    ["wind corridor", "ventilation", "corridor", "comfort", "Forma", "CFD", "square"],
+)
+def _wind_corridor(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    report = ctx.report(district=args.get("district"), date=args.get("date"), hour=args.get("hour"))
+    return {**report["wind_corridor"], "district": report["district"]}
+
+
+@tool(
     "time_machine",
     "Heat Time-Machine — past / present / future / what-if slider (history + forecast).",
     ["time machine", "past", "history", "future", "forecast", "whatif", "time travel"],

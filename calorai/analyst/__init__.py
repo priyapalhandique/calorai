@@ -25,6 +25,7 @@ from .terrain import flight_overlay, terrain_block
 from .time_machine import time_machine_block
 from .uhi import rank_districts, uhi_prevalence_block
 from .whatif import whatif_cool_roof
+from .wind_corridor import wind_corridor_block
 
 __all__ = [
     "gini",
@@ -56,7 +57,10 @@ __all__ = [
     "lake_effect_block",
     "pollutants_block",
     "resilience_block",
+    "terrain_block",
     "time_machine_block",
+    "uhi_prevalence_block",
+    "wind_corridor_block",
     "whatif_cool_roof",
     "work_rest_schedule",
 ]

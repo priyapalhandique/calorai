@@ -559,12 +559,34 @@ function renderAnalytics() {
   renderUhi(d.uhi || {});
   renderGeo(d.geomorphology || {});
   renderLake(d.lake_effect || {});
+  renderWindCorridor(d.wind_corridor || {});
   renderTimeMachine(d.time_machine || {});
   renderResilience(d.resilience || {});
   renderCarbon(d.carbon || {});
   renderCitizen(d.citizen || {});
   renderHeatwave(d.heatwave_landuse || {});
   renderPollutants(d.pollutants || {});
+}
+
+function renderWindCorridor(wc){
+  if(!wc||!wc.present){ $("windCorridorBody").innerHTML="<p class='hint'>wind corridors unavailable</p>"; return; }
+  const rows=[
+    ["Canyon regime", esc(wc.canyon_regime||"—")],
+    ["Street wind", fmt(wc.street_speed_m_s,2)+" m/s — "+esc(wc.comfort||"")],
+    ["Corridor quality", esc(wc.corridor_quality||"")+" · "+wc.ventilation_corridors+" corridors"],
+    ["Tree porosity / leaf", fmt(wc.tree_porosity,2)+" / "+fmt(wc.leaf_density,2)],
+    ["Openness (sky)", fmt(wc.openness,2)],
+  ];
+  let html = rows.map(([k,v])=>`<div><span>${esc(k)}</span><b>${v}</b></div>`).join("");
+  if(wc.wind_rose && wc.wind_rose.length){
+    html += `<div style="margin-top:8px"><b>Wind rose (thermal proxy)</b></div>`;
+    html += wc.wind_rose.map(r=>`<div><span>${esc(r.sector)} ${r.deg}°</span><b>${r.pct.toFixed(1)}% ${r.dominant?"★":""}</b></div>`).join("");
+  }
+  if(wc.proposals && wc.proposals.length){
+    html += `<div style="margin-top:8px"><b>Proposals (Forma-style)</b></div>`;
+    html += wc.proposals.map(p=>`<div><span>${esc(p.name)}</span><b>${fmt(p.street_speed_m_s,2)} m/s — ${esc(p.comfort)}</b></div>`).join("");
+  }
+  $("windCorridorBody").innerHTML = html + (wc.caveat?`<p class="hint">${esc(wc.caveat)}</p>`:"");
 }
 
 function renderTimeMachine(tm){

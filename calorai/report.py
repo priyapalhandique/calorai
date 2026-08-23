@@ -90,6 +90,16 @@ def _styles() -> dict[str, ParagraphStyle]:
             spaceAfter=4,
             keepWithNext=True,
         ),
+        "H3": ParagraphStyle(
+            "CaloraiH3",
+            parent=base["Heading3"],
+            fontName="Helvetica-Bold",
+            fontSize=10,
+            textColor=ACCENT,
+            spaceBefore=8,
+            spaceAfter=3,
+            keepWithNext=True,
+        ),
         "Body": ParagraphStyle(
             "CaloraiBody",
             parent=base["BodyText"],
@@ -1187,7 +1197,46 @@ def _story(report: dict[str, Any]) -> list[Any]:
         if caveat: out.append(_p(caveat, st["Small"]))
         out.append(Spacer(1, 0.4 * cm))
 
-    # ------------------------------------------------ 18 Heat Time-Machine
+    # ------------------------------------------------ 18 Wind corridors — city square ventilation (Forma-inspired)
+    wc = report.get("wind_corridor", {}) or {}
+    if wc.get("present"):
+        out.append(_p("18. Wind corridors — city square ventilation (Forma-inspired)", st["H1"]))
+        out.append(_kv_table([
+            ("Canyon regime", wc.get("canyon_regime", "—")),
+            ("Street wind (m/s)", wc.get("street_speed_m_s", "—")),
+            ("Comfort", wc.get("comfort", "—")),
+            ("Corridor quality", wc.get("corridor_quality", "—")),
+            ("Ventilation corridors", wc.get("ventilation_corridors", "—")),
+            ("Tree porosity / leaf density", f'{wc.get("tree_porosity", "—")} / {wc.get("leaf_density", "—")}'),
+            ("Openness (sky%)", wc.get("openness", "—")),
+        ]))
+        rose = wc.get("wind_rose", []) or []
+        if rose:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p("Wind rose (thermal proxy, like Forma 35% south):", st["H3"]))
+            rose_rows = [["Sector", "Deg", "%", "Dominant"]]
+            for r in rose:
+                rose_rows.append([r["sector"], str(r["deg"]), f'{r["pct"]:.1f}%', "yes" if r["dominant"] else ""])
+            data = [[_p(c, st["Body"]) for c in row] for row in rose_rows]
+            table = Table(data, colWidths=[2*cm, 2*cm, 2*cm, 3*cm])
+            table.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), NAVY), ("TEXTCOLOR", (0,0), (-1,0), colors.white), ("GRID", (0,0), (-1,-1), 0.4, GRID), ("FONTSIZE", (0,0), (-1,-1), 8)]))
+            out.append(table)
+        props = wc.get("proposals", []) or []
+        if props:
+            out.append(Spacer(1, 0.2 * cm))
+            out.append(_p("Proposals comparison (like Forma proposals):", st["H3"]))
+            prow = [["Proposal", "h/w", "leaf", "street wind", "comfort"]]
+            for p in props:
+                prow.append([p["name"], str(p["h_over_w"]), str(p["leaf_density"]), f'{p["street_speed_m_s"]} m/s', p["comfort"]])
+            data = [[_p(c, st["Body"]) for c in row] for row in prow]
+            table = Table(data, colWidths=[4.5*cm, 2*cm, 2*cm, 3*cm, 3.5*cm])
+            table.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), NAVY), ("TEXTCOLOR", (0,0), (-1,0), colors.white), ("GRID", (0,0), (-1,-1), 0.4, GRID), ("FONTSIZE", (0,0), (-1,-1), 7)]))
+            out.append(table)
+        caveat = wc.get("caveat")
+        if caveat: out.append(_p(caveat, st["Small"]))
+        out.append(Spacer(1, 0.4 * cm))
+
+    # ------------------------------------------------ 19 Heat Time-Machine
     tm = report.get("time_machine", {}) or {}
     if tm.get("present"):
         out.append(_p("18. Heat Time-Machine — past / present / future / what-if", st["H1"]))
@@ -1262,7 +1311,7 @@ def _story(report: dict[str, Any]) -> list[Any]:
         out.append(Spacer(1, 0.4 * cm))
 
     # ------------------------------------------------ 24 provenance & warnings
-    out.append(_p("24. Provenance & warnings", st["H1"]))
+    out.append(_p("25. Provenance & warnings", st["H1"]))
     out.append(_p(report.get("provenance", ""), st["Small"]))
     warnings = report.get("warnings", []) or []
     if warnings:
