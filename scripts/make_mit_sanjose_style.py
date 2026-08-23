@@ -111,30 +111,26 @@ for i in range(n_classes):
     high = min(high, vmax)
     ax_leg.text(0.20, y+0.022, f"{low:5.2f} — {high:5.2f} °C", fontsize=6.5, va="center", ha="left", color="#222222", family="monospace")
 
-# Right map — BIGGER basemap with AOI heatmap inside it (like San Jose image: heatmap centered, streets around)
-# Basemap is ~2× larger than AOI so locality names (CAMBRIDGE, BOSTON, SOMERVILLE) stay visible around the heatmap
-map_lon0, map_lon1 = lon0 - 0.035, lon1 + 0.035
-map_lat0, map_lat1 = lat0 - 0.025, lat1 + 0.025
+# Right map — heatmap covering whole AOI (earlier style) but with locality labels on top (as you asked: earlier one + labels)
 ax_map = fig.add_subplot(gs[0, 1])
-ax_map.set_xlim(map_lon0, map_lon1)
-ax_map.set_ylim(map_lat0, map_lat1)
+ax_map.set_xlim(lon0, lon1)
+ax_map.set_ylim(lat0, lat1)
 ax_map.set_aspect("equal")
 # Try to add real CARTO light basemap with locality names (like San Jose image)
 # Falls back to faint grid if offline
 basemap_ok = False
 try:
     import contextily as ctx
-    # Use zoom 13 for the larger basemap (~8km) so streets + locality names render faintly
-    ctx.add_basemap(ax_map, crs="EPSG:4326", source=ctx.providers.CartoDB.Positron, zoom=13, attribution=False)
+    ctx.add_basemap(ax_map, crs="EPSG:4326", source=ctx.providers.CartoDB.Positron, zoom=14, attribution=False)
     basemap_ok = True
-    print("added CARTO Positron basemap with locality names (bigger map)")
+    print("added CARTO Positron basemap with locality names")
 except Exception as e:
     print(f"basemap failed ({e}), using faint grid fallback")
     ax_map.set_facecolor("#f6f6f4")
-    for lon in np.linspace(map_lon0, map_lon1, 10):
-        ax_map.plot([lon, lon], [map_lat0, map_lat1], color="#e8e8e6", lw=0.5, alpha=0.6, zorder=0)
-    for lat in np.linspace(map_lat0, map_lat1, 8):
-        ax_map.plot([map_lon0, map_lon1], [lat, lat], color="#e8e8e6", lw=0.5, alpha=0.6, zorder=0)
+    for lon in np.linspace(lon0, lon1, 8):
+        ax_map.plot([lon, lon], [lat0, lat1], color="#e8e8e6", lw=0.6, alpha=0.7, zorder=0)
+    for lat in np.linspace(lat0, lat1, 6):
+        ax_map.plot([lon0, lon1], [lat, lat], color="#e8e8e6", lw=0.6, alpha=0.7, zorder=0)
     ax_map.text((lon0+lon1)/2, (lat0+lat1)/2, "MIT CAMPUS", fontsize=11, color="#c0c0c0", ha="center", va="center", alpha=0.5, fontweight="bold", zorder=1)
 # Heatmap tiles: scatter with discrete colors, as in San Jose image (square tiles, no edges, alpha)
 # Use slightly higher alpha over basemap so streets remain visible, but low enough to keep basemap labels legible
