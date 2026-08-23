@@ -21,7 +21,7 @@ it costs, and what an agent would do next.
 
 ![MIT Campus AOI · daily-average temperature (24-h heatmap, 16,512 tiles)](docs/images/heatmap_visualized_mit.png)
 
-*Above: MIT Campus AOI · daily-average temperature (24-h heatmap, 16,512 tiles) rendered tile-by-tile with equal-interval 12 classes (0.18 °C wide) — avg 27.23 °C, range 26.33–28.50 °C. The southeast urban heat island (Cambridgeport/Kendall) and the cool Charles River strip are exactly the kind of pattern the use-case notebooks pick up when they join your point list against this layer. Re-rendered for MIT Campus (42.3601,-71.0942) from our analysis — same `coolwarm` fixed scale, same tile-by-tile discrete palette as the San Jose AOI, but **our analysis**, not a copy-paste of `docs/images/heatmap_visualized.png`.*
+*Above: MIT Campus AOI · daily-average temperature (24-h heatmap, 16,512 tiles) rendered tile-by-tile with equal-interval 12 classes (0.18 °C wide) — avg 27.23 °C, range 26.33–28.50 °C — **overlaid on a CARTO Positron light basemap with streets and locality names** (`CAMBRIDGE`, `MIT CAMPUS`, `CHARLES RIVER`, `KENDALL`, `CENTRAL` faint underneath, like the San Jose image's `SAN JOSE`/`SANTA CLARA`/`ALUM ROCK` labels). The southeast urban heat island (Cambridgeport/Kendall) and the cool Charles River strip are exactly the kind of pattern the use-case notebooks pick up when they join your point list against this layer. Re-rendered for MIT Campus (42.3601,-71.0942) from our analysis — same `coolwarm` fixed scale, same tile-by-tile discrete palette as the San Jose AOI, but **our analysis**, not a copy-paste of `docs/images/heatmap_visualized.png`.*
 
 ![MIT summary — min/mean/max + histogram (our analysis)](docs/images/heatmap_summary_mit.png)
 
