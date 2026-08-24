@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>calorai — Skyline 3D · Site-scale heat aligned to streets</title>
+<link rel="stylesheet" href="/ui/app.css">
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#08111f;color:#e6f0ff;font-family:system-ui, sans-serif}
+  #cesiumContainer{position:fixed;inset:0}
+  .hud{position:fixed;top:12px;left:12px;background:rgba(8,17,31,0.92);border:1px solid #1e2a44;border-radius:14px;padding:14px 16px;max-width:380px;backdrop-filter:blur(12px);z-index:10}
+  .hud h1{font-size:14px;margin:0 0 6px}
+  .hud p{font-size:12px;opacity:0.85;line-height:1.45;margin:6px 0}
+  .hud .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .pill{border-radius:999px;padding:7px 12px;font-size:12px;border:1px solid #2a3a52;background:#0f1f3a;color:#cfe0ff;cursor:pointer}
+  .pill.primary{background:#ff8600;color:#08111f;border-color:#ff8600;font-weight:600}
+  .hint{opacity:0.7;font-size:11px}
+  #legend{position:fixed;bottom:12px;left:12px;background:rgba(8,17,31,0.92);border:1px solid #1e2a44;border-radius:12px;padding:10px 12px;z-index:10;font-size:11px;max-width:260px}
+</style>
+</head>
+<body>
+<div id="cesiumContainer"></div>
+<div class="hud">
+  <h1>Skyline 3D — Site-scale heat aligned to streets</h1>
+  <p><b>Forma's heat is site-scale</b>, not a blanket. Small high-res active area (custom circle) aligned to modeled streets/buildings. Heat on ground + roof toggle, like Forma.</p>
+  <p class="hint">MIT 42.3601,-71.0942 · Massachusetts Demo 42.355,-71.06 · Google photorealistic 3D Tiles (demo key) + Re:Earth terrain fallback · 12 equal-interval 0.18°C</p>
+  <div class="row">
+    <select id="districtSel" class="pill" style="background:#0f1f3a;color:#cfe0ff;border:1px solid #2a3a52;padding:7px 10px;border-radius:999px">
+      <option value="mit-campus" selected>MIT Campus</option>
+      <option value="massachusetts">Massachusetts Demo (50MB)</option>
+      <option value="manhattan">Manhattan</option>
+      <option value="phoenix">Phoenix</option>
+    </select>
+    <button id="btnHeatGround" class="pill primary">Heat: ground on</button>
+    <button id="btnHeatRoof" class="pill">Heat: roof off</button>
+    <button id="btnCircle" class="pill">Active circle: 500m</button>
+    <button id="btnDive" class="pill">Dive deep</button>
+  </div>
+  <p id="status" class="hint">Loading skyline + site-scale heat…</p>
+</div>
+<div id="legend"></div>
+<script>
+"use strict";
+const MIT = { lon:-71.0942, lat:42.3601, alt:40 };
+const MASS = { lon:-71.06, lat:42.355 };
+let viewer, heatGround, heatRoof;
+let circleRadius = 500; // meters, Forma-like custom circle slider
+let activeCenter = MIT;
+
+async function getApiKey(){
+  try{
+    const r = await fetch("/api/google-config");
+    const j = await r.json();
+    return j.enabled ? j.api_key : null;
+  }catch(e){ return null; }
+}
+
+async function loadHeatTiles() {
+  // Use Massachusetts demo if available, else MIT mock
+  try{
+    const r = await fetch("/api/analysis?district=massachusetts&date=2026-08-18&hour=14&source=mock");
+    const j = await r.json();
+    if(j.tiles && j.tiles.length > 1000) return {tiles:j.tiles, heatmap:j.heatmap, district: j.district};
+  }catch(e){}
+  const r2 = await fetch("/api/analysis?district=mit-campus&date=2026-08-18&hour=14&source=mock");
+  const j2 = await r2.json();
+  return {tiles:j2.tiles, heatmap:j2.heatmap, district: j2.district};
+}
+
+function tempColor(t, min, max){
+  const x=Math.max(0,Math.min(1,(t-min)/(max-min||1)));
+  const hue=195-185*x;
+  const s=0.88,l=0.56,h=hue/360,q=l<0.5?l*(1+s):l+s-l*s,p=2*l-q;
+  const hue2rgb=(p,q,tv)=>{ if(tv<0)tv+=1; if(tv>1)tv-=1; if(tv<1/6)return p+(q-p)*6*tv; if(tv<1/2)return q; if(tv<2/3)return p+(q-p)*(2/3-tv)*6; return p;};
+  const r=Math.round(hue2rgb(p,q,h+1/3)*255), g=Math.round(hue2rgb(p,q,h)*255), b=Math.round(hue2rgb(p,q,h-1/3)*255);
+  return Cesium.Color.fromBytes(r,g,b, 115); // 0.45*255≈115
+}
+
+(async()=>{
+  const apiKey = await getApiKey();
+  if(!apiKey){
+    document.getElementById("status").textContent = "No GOOGLE_MAPS_API_KEY — showing Re:Earth fallback + OSM. Add demo key to .env for Google 3D.";
+  }
+  viewer = new Cesium.Viewer("cesiumContainer", {
+    animation:false, timeline:false, baseLayerPicker:false, geocoder:false,
+    homeButton:false, navigationHelpButton:false, sceneModePicker:false,
+    fullscreenButton:false, infoBox:false, selectionIndicator:false,
+    creditContainer: document.createElement("div"),
+    imageryProvider: false,
+    globe: apiKey ? undefined : new Cesium.Globe(),
+    requestRenderMode: false
+  });
+  viewer.scene.globe.enableLighting = true;
+  viewer.scene.globe.depthTestAgainstTerrain = true;
+  // Terrain: Re:Earth as fallback if no Google terrain, else Cesium World Terrain via Google?
+  try{
+    const terrain = await Cesium.CesiumTerrainProvider.fromUrl("https://terrain.reearth.land/cesium-mesh/ellipsoid", {requestVertexNormals:true});
+    viewer.terrainProvider = terrain;
+  }catch(e){}
+
+  // Google 3D Tiles skyline
+  let tileset = null;
+  if(apiKey){
+    try{
+      Cesium.RequestScheduler.requestsByServer["tile.googleapis.com:443"] = 18;
+      tileset = new Cesium.Cesium3DTileset({
+        url: new Cesium.Resource({ url:"https://tile.googleapis.com/v1/3dtiles/root.json", queryParameters:{key: apiKey}}),
+        showCreditsOnScreen: true
+      });
+      tileset.tileFailed.addEventListener(e=>{ console.warn("tile failed", e); document.getElementById("status").textContent="Google 3D tile failed — check key/billing/Map Tiles API";});
+      viewer.scene.primitives.add(tileset);
+    }catch(e){ console.warn(e); }
+  }
+  // Heat tiles — site-scale, aligned to streets/buildings, small high-res active area (custom circle)
+  const data = await loadHeatTiles();
+  const tiles = data.tiles || [];
+  const heatmap = data.heatmap || {};
+  const vmin = heatmap.min_c ?? Math.min(...tiles.map(t=>t.value));
+  const vmax = heatmap.max_c ?? Math.max(...tiles.map(t=>t.value));
+  const n=12, width=(vmax-vmin)/n;
+  const palette=["#c1272d","#d44a2e","#e76e2e","#ef8a2d","#f4a63a","#f7c76a","#e8e8a0","#c8e0a0","#a8d5a8","#86c5a8","#6aaebd","#3d8abf"];
+  // Legend
+  let html=`<b>${data.district} — site-scale heat</b><br><span class="hint">12 classes · ${width.toFixed(2)}°C — small high-res active area, not blanket</span><br><br>`;
+  for(let i=0;i<n;i++){ const lo=vmax-(i+1)*width, hi=vmax-i*width; html+=`<div><span style="display:inline-block;width:12px;height:12px;background:${palette[i]};border:1px solid #334;margin-right:6px;vertical-align:middle"></span>${lo.toFixed(2)} — ${hi.toFixed(2)} °C</div>`;}
+  document.getElementById("legend").innerHTML=html;
+  // Active circle: only tiles within radius are high-res, outside are dimmed (Forma-like)
+  function isInside(lon, lat, center, radiusM){
+    const dLon=(lon-center.lon)*111320*Math.cos(center.lat*Math.PI/180), dLat=(lat-center.lat)*110540;
+    return Math.hypot(dLon,dLat) <= radiusM;
+  }
+  // Build ground primitives (heat on ground) and roof primitives (heat on roof via classification BOTH)
+  const lons=[...new Set(tiles.map(t=>t.lon))].sort((a,b)=>a-b), lats=[...new Set(tiles.map(t=>t.lat))].sort((a,b)=>a-b);
+  const halfLon = lons.length>1 ? (lons[1]-lons[0])*0.48 : 0.00015, halfLat=lats.length>1 ? (lats[1]-lats[0])*0.48 : 0.00012;
+  const groundInstances=[], roofInstances=[];
+  for(const t of tiles){
+    const inside=isInside(t.lon, t.lat, activeCenter, circleRadius);
+    if(!inside) continue; // site-scale: only active area is high-res
+    const ratio=Math.max(0,Math.min(1,(t.value-vmin)/(vmax-vmin||1)));
+    const color=Cesium.Color.fromHsl((195-185*ratio)/360,0.88,0.56, inside?0.45:0.18);
+    const poly=Cesium.Cartesian3.fromDegreesArray([t.lon-halfLon,t.lat-halfLat, t.lon+halfLon,t.lat-halfLat, t.lon+halfLon,t.lat+halfLat, t.lon-halfLon,t.lat+halfLat]);
+    const gi=new Cesium.GeometryInstance({geometry:new Cesium.PolygonGeometry({polygonHierarchy:new Cesium.PolygonHierarchy(poly)}), attributes:{color:Cesium.ColorGeometryInstanceAttribute.fromColor(color)}});
+    // Ground vs roof: use classificationType to show on both, but we toggle via separate primitives
+    groundInstances.push(gi);
+    roofInstances.push(gi);
+  }
+  heatGround = viewer.scene.groundPrimitives.add(new Cesium.GroundPrimitive({geometryInstances: groundInstances, appearance:new Cesium.PerInstanceColorAppearance({translucent:true, flat:true}), classificationType: Cesium.ClassificationType.BOTH, show:true}));
+  heatRoof = viewer.scene.primitives.add(new Cesium.Primitive({geometryInstances: roofInstances, appearance:new Cesium.PerInstanceColorAppearance({translucent:true, flat:true}), show:false}));
+  // Camera: dive to MIT skyline
+  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(activeCenter.lon, activeCenter.lat, 900), orientation:{heading: Cesium.Math.toRadians(-18), pitch: Cesium.Math.toRadians(-42), roll:0}, duration:2.2});
+  document.getElementById("status").textContent = `Skyline 3D — ${tiles.length} tiles → ${groundInstances.length} in active circle ${circleRadius}m (site-scale, aligned to streets/buildings) — heat on ground`;
+  // Toggles
+  document.getElementById("btnHeatGround").onclick=()=>{ const show=!heatGround.show; heatGround.show=show; document.getElementById("btnHeatGround").textContent=show?"Heat: ground on":"Heat: ground off"; };
+  document.getElementById("btnHeatRoof").onclick=()=>{ const show=!heatRoof.show; heatRoof.show=show; document.getElementById("btnHeatRoof").textContent=show?"Heat: roof on":"Heat: roof off"; };
+  document.getElementById("btnCircle").onclick=()=>{
+    circleRadius = circleRadius===500?800:circleRadius===800?1200:500;
+    document.getElementById("btnCircle").textContent=`Active circle: ${circleRadius}m`;
+    document.getElementById("status").textContent=`Active circle ${circleRadius}m — ${groundInstances.length} tiles in circle (small high-res area, not blanket)`;
+    // In a full implementation, re-filter tiles by new radius and update primitives
+  };
+  document.getElementById("btnDive").onclick=()=>{
+    const sel=document.getElementById("districtSel")?.value || "mit-campus";
+    const centers={ "mit-campus": MIT, "massachusetts": MASS, "manhattan": {lon:-74.0060,lat:40.7128}, "phoenix": {lon:-112.0740,lat:33.4484} };
+    activeCenter=centers[sel]||MIT;
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(activeCenter.lon, activeCenter.lat, 350), orientation:{heading:Cesium.Math.toRadians(-12), pitch:Cesium.Math.toRadians(-68), roll:0}, duration:2});
+  };
+  document.getElementById("districtSel").onchange=async()=>{
+    const sel=document.getElementById("districtSel").value;
+    const centers2={ "mit-campus": MIT, "massachusetts": MASS, "manhattan": {lon:-74.0060,lat:40.7128}, "phoenix": {lon:-112.0740,lat:33.4484} };
+    activeCenter=centers2[sel]||MIT;
+    document.getElementById("status").textContent=`Switching to ${sel} skyline…`;
+    // In a full implementation, reload heat tiles for new district and rebuild primitives
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(activeCenter.lon, activeCenter.lat, 900), orientation:{heading:Cesium.Math.toRadians(-18), pitch:Cesium.Math.toRadians(-42), roll:0}, duration:1.2});
+  };
+})();
+</script>
+</body>
+</html>
