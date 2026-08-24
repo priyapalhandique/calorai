@@ -75,6 +75,9 @@ def health() -> dict[str, Any]:
 
 @app.get("/api/districts")
 def districts() -> list[dict[str, Any]]:
+    """
+    Return the list of districts with their details.
+    """
     return [
         {
             "key": key,
@@ -105,6 +108,13 @@ def audit(body: AuditBody) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     report = agent.run(narrate=body.narration != "none")
     return report
+
+
+@app.get("/api/google-config")
+def google_config() -> dict[str, Any]:
+    """Return the browser-safe Google Maps configuration for the 3D preview."""
+    key = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+    return {"enabled": bool(key), "api_key": key}
 
 
 class AskBody(BaseModel):
