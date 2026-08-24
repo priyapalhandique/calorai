@@ -71,7 +71,7 @@ for hour in range(24):
                 path_effects=[pe.withStroke(linewidth=1.8, foreground="white", alpha=0.9)])
     # Heat tiles as pcolormesh for speed (discrete but continuous)
     # Use lower alpha over basemap so streets locality names stay legible (user saw only Cambridge)
-    sc = ax.scatter(lons_grid.ravel(), lats_grid.ravel(), c=vals.ravel(), cmap="coolwarm", vmin=vmin, vmax=vmax, s=3, marker="s", alpha=0.62 if basemap_ok else 0.92, edgecolors="none", zorder=2)
+    sc = ax.scatter(lons_grid.ravel(), lats_grid.ravel(), c=vals.ravel(), cmap="coolwarm", vmin=vmin, vmax=vmax, s=3, marker="s", alpha=0.45 if basemap_ok else 0.92, edgecolors="none", zorder=2)
     # Always add locality labels on top (so MIT is visible even over hot tiles)
     import matplotlib.patheffects as pe
     for txt, lon, lat, fs, col, fw in [

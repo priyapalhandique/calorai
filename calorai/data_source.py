@@ -273,6 +273,16 @@ DISTRICTS: dict[str, District] = {
         # Campus canyons (Stata, Killian) + Charles River flat; MIT/MBTA traffic.
         evaporative_fraction=0.04,
     ),
+    "massachusetts": District(
+        name="Massachusetts Demo", lat=42.355, lon=-71.06,
+        base_mean_c=27.0, base_amplitude_c=6.0, heat_island_c=3.0,
+        albedo=0.20, humidity_base_pct=60.0, wind_base_m_s=2.5,
+        cloud_base_pct=30.0,
+        h_over_w=0.7, wall_albedo=0.27, utc_offset_hours=-5.0,
+        elevation_m=10.0,
+        # Demo AOI from user-provided GeoJSON (50MB heatmap, 16k+ tiles, Charles River + Cambridgeport)
+        evaporative_fraction=0.03,
+    ),
 }
 
 
@@ -291,6 +301,63 @@ def _mock_precipitation(district: District) -> list[float]:
             0.0, 0.0, 0.0, 0.0,
         ]
     return [0.0] * 24
+
+
+_MASSACHUSETTS_TILES_CACHE: list[dict[str, float]] | None = None
+
+def _load_massachusetts_tiles() -> list[dict[str, float]] | None:
+    """Load the user-provided Massachusetts demo heatmap (50MB GeoJSON) as tiles.
+
+    Returns list of {lat, lon, value} in °C (converted from temperature_f), or None if file missing.
+    Cached per-process.
+    """
+    global _MASSACHUSETTS_TILES_CACHE
+    if _MASSACHUSETTS_TILES_CACHE is not None:
+        return _MASSACHUSETTS_TILES_CACHE
+    try:
+        from pathlib import Path
+        import json
+
+        p = Path(__file__).resolve().parent.parent / "data" / "massachusetts_heatmap.geojson"
+        if not p.exists():
+            return None
+        # The file is a FeatureCollection with Polygon tiles and properties.temperature_f
+        data = json.loads(p.read_text(encoding="utf-8"))
+        features = data.get("features", [])
+        tiles: list[dict[str, float]] = []
+        for feat in features:
+            props = feat.get("properties", {})
+            temp_f = props.get("temperature_f")
+            if temp_f is None:
+                temp_f = props.get("temperature")  # fallback
+            if temp_f is None:
+                continue
+            try:
+                temp_c = (float(temp_f) - 32.0) * 5.0 / 9.0
+            except Exception:
+                continue
+            geom = feat.get("geometry", {})
+            coords = geom.get("coordinates", [])
+            # coords is list of rings, take centroid of first ring
+            try:
+                ring = coords[0] if coords else []
+                if ring and isinstance(ring[0], list) and isinstance(ring[0][0], list):
+                    ring = ring[0]  # handle double nesting
+                lons = [pt[0] for pt in ring if isinstance(pt, (list, tuple)) and len(pt) >= 2]
+                lats = [pt[1] for pt in ring if isinstance(pt, (list, tuple)) and len(pt) >= 2]
+                if not lons or not lats:
+                    continue
+                lon = sum(lons) / len(lons)
+                lat = sum(lats) / len(lats)
+            except Exception:
+                continue
+            tiles.append({"lat": lat, "lon": lon, "value": round(temp_c, 2)})
+        if not tiles:
+            return None
+        _MASSACHUSETTS_TILES_CACHE = tiles
+        return tiles
+    except Exception:
+        return None
 
 
 def get_district(name: str) -> District:
@@ -353,6 +420,21 @@ class MockDataSource:
     ) -> HeatmapLayer:
         self._calls += 1
         district = get_district(district_name)
+        # Massachusetts demo: serve the user-provided 50MB GeoJSON as the heatmap (no synthetic grid)
+        if district_name.strip().lower().replace(" ", "-") == "massachusetts" and analytic_type == "tcm":
+            demo_tiles = _load_massachusetts_tiles()
+            if demo_tiles:
+                vals = [t["value"] for t in demo_tiles]
+                return HeatmapLayer(
+                    analytic_type=analytic_type,
+                    units="celsius",
+                    n_cells=len(demo_tiles),
+                    min=min(vals) if vals else 0.0,
+                    mean=sum(vals) / len(vals) if vals else 0.0,
+                    max=max(vals) if vals else 0.0,
+                    tiles=demo_tiles,
+                    source="demo-massachusetts-geojson",
+                )
         thresh = threshold or district.exceedance_threshold_c
         tiles: list[dict[str, float]] = []
         series_by_tile: list[list[float]] = []

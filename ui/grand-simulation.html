@@ -80,7 +80,7 @@ Cesium.RequestScheduler.requestsByServer["tile.googleapis.com:443"] = 18;
 
 function setHeatVisibility(visible) {
   heatOn = visible;
-  try { map.setPaintProperty("heat-fill", "fill-opacity", visible ? 0.62 : 0); } catch(e) {}
+  try { map.setPaintProperty("heat-fill", "fill-opacity", visible ? 0.45 : 0); } catch(e) {}
   googleHeatPrimitives.forEach(primitive => { primitive.show = visible; });
   document.getElementById("btnHeat").textContent = visible ? "Heat on/off" : "Heat off · click to show";
 }
@@ -257,7 +257,7 @@ map.on("styledata", async () => {
   });
   heatGeo = { type:"FeatureCollection", features };
   map.addSource("heat", { type:"geojson", data: heatGeo });
-  map.addLayer({ id:"heat-fill", type:"fill", source:"heat", paint:{ "fill-color": ["get","color"], "fill-opacity": heatOn?0.62:0 } });
+  map.addLayer({ id:"heat-fill", type:"fill", source:"heat", paint:{ "fill-color": ["get","color"], "fill-opacity": heatOn?0.45:0 } });
   // Isotherms (from thermal_wind.contours)
   const cont = data.thermal_wind?.contours;
   if (cont && cont.present) {

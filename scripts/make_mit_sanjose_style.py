@@ -134,7 +134,7 @@ except Exception as e:
     ax_map.text((lon0+lon1)/2, (lat0+lat1)/2, "MIT CAMPUS", fontsize=11, color="#c0c0c0", ha="center", va="center", alpha=0.5, fontweight="bold", zorder=1)
 # Heatmap tiles: scatter with discrete colors, as in San Jose image (square tiles, no edges, alpha)
 # Use slightly higher alpha over basemap so streets remain visible, but low enough to keep basemap labels legible
-alpha = 0.62 if basemap_ok else 0.92
+alpha = 0.45 if basemap_ok else 0.92
 for i in range(n_classes):
     mask = class_indices == i
     if not np.any(mask):
