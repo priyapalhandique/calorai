@@ -110,17 +110,12 @@ function tempColor(t, min, max){
     homeButton:false, navigationHelpButton:false, sceneModePicker:false,
     fullscreenButton:false, infoBox:false, selectionIndicator:false,
     creditContainer: document.createElement("div"),
-    imageryProvider: false,
-    globe: apiKey ? undefined : new Cesium.Globe(),
+    imageryProvider: new Cesium.OpenStreetMapImageryProvider({ url: "https://a.tile.openstreetmap.org/" }),
+    terrainProvider: await Cesium.CesiumTerrainProvider.fromUrl("https://terrain.reearth.land/cesium-mesh/ellipsoid", {requestVertexNormals:true}).catch(()=> new Cesium.EllipsoidTerrainProvider()),
     requestRenderMode: false
   });
   viewer.scene.globe.enableLighting = true;
   viewer.scene.globe.depthTestAgainstTerrain = true;
-  // Terrain: Re:Earth as fallback if no Google terrain, else Cesium World Terrain via Google?
-  try{
-    const terrain = await Cesium.CesiumTerrainProvider.fromUrl("https://terrain.reearth.land/cesium-mesh/ellipsoid", {requestVertexNormals:true});
-    viewer.terrainProvider = terrain;
-  }catch(e){}
 
   // Google 3D Tiles skyline
   let tileset = null;
