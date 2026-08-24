@@ -58,7 +58,22 @@ async function getApiKey(){
 }
 
 async function loadHeatTiles() {
-  // Use Massachusetts demo if available, else MIT mock
+  // File:// fallback: use synthetic 16k grid so the skyline is visible even without a server (like your screenshot)
+  if(location.protocol==="file:"){
+    const nx=64, ny=64, lon0=-71.12, lon1=-71.06, lat0=42.34, lat1=42.38;
+    const tiles=[];
+    for(let iy=0; iy<ny; iy++) for(let ix=0; ix<nx; ix++){
+      const lon=lon0+(ix/(nx-1))*(lon1-lon0), lat=lat0+(iy/(ny-1))*(lat1-lat0);
+      const dx=(lon-lon0)/(lon1-lon0), dy=(42.38-lat)/(42.38-42.34);
+      const se=0.62*dx+0.38*dy, river=Math.exp(-((lat-42.355)**2)/0.000018)*1.4;
+      const md=Math.hypot(lat-42.3601, lon+71.0942), kd=Math.hypot(lat-42.3625, lon+71.0862);
+      const v=26.35+se*2.05-river*0.9+0.6*Math.exp(-md*180)+0.4*Math.exp(-kd*220)+(Math.random()-0.5)*0.24;
+      tiles.push({lon,lat,value:v});
+    }
+    const vals=tiles.map(t=>t.value);
+    return {tiles, heatmap:{min_c: Math.min(...vals), max_c: Math.max(...vals), mean_c: vals.reduce((a,b)=>a+b,0)/vals.length}, district:"MIT Campus (file:// synthetic)"};
+  }
+  // Normal http:// via API (site-scale, 16k when mock was small)
   try{
     const r = await fetch("/api/analysis?district=massachusetts&date=2026-08-18&hour=14&source=mock");
     const j = await r.json();
@@ -78,10 +93,17 @@ function tempColor(t, min, max){
   return Cesium.Color.fromBytes(r,g,b, 115); // 0.45*255≈115
 }
 
+  if(location.protocol==="file:"){
+    document.getElementById("status").innerHTML = '<b style="color:#ff8600">Opened as file:// — please run via http://</b><br>Use: <code>python -m calorai serve</code> then open <a href="http://127.0.0.1:8000/ui/skyline-3d.html" style="color:#7dd3fc">http://127.0.0.1:8000/ui/skyline-3d.html</a> (or <code>uvicorn calorai.main:app --port 8000</code>).<br>File:// cannot fetch /api/* (heatmap, wind, Google key) — showing synthetic heat + stars only.';
+    document.getElementById("status").style.background="rgba(255,134,0,0.12)";
+    document.getElementById("status").style.border="1px solid #ff8600";
+    document.getElementById("status").style.padding="8px";
+    document.getElementById("status").style.borderRadius="8px";
+  }
 (async()=>{
   const apiKey = await getApiKey();
   if(!apiKey){
-    document.getElementById("status").textContent = "No GOOGLE_MAPS_API_KEY — showing Re:Earth fallback + OSM. Add demo key to .env for Google 3D.";
+    if(location.protocol!=="file:") document.getElementById("status").textContent = "No GOOGLE_MAPS_API_KEY — showing Re:Earth fallback + OSM. Add demo key AIzaSyDh-…21pj8 to .env for Google 3D.";
   }
   viewer = new Cesium.Viewer("cesiumContainer", {
     animation:false, timeline:false, baseLayerPicker:false, geocoder:false,
