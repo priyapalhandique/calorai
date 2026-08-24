@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="/ui/app.css">
 <link href="https://unpkg.com/maplibre-gl@4.0.2/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.0.2/dist/maplibre-gl.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
 <style>
   body { margin:0; background:#08111f; color:#e6f0ff; }
   #map { position:fixed; inset:0; width:100vw; height:100vh; }
@@ -19,16 +21,19 @@
   .legend { position:fixed; bottom:12px; left:12px; background:rgba(8,17,31,0.92); border:1px solid #1e2a44; border-radius:12px; padding:10px 12px; z-index:10; font-size:11px; }
   .legend .swatch { display:inline-block; width:12px; height:12px; margin-right:6px; border:1px solid #334; vertical-align:middle; }
   .hint { opacity:0.7; font-size:11px; }
+  #googleMap { position:fixed; inset:0; width:100vw; height:100vh; display:none; }
 </style>
 </head>
 <body>
 <div id="map"></div>
+<div id="googleMap"></div>
 <div class="hud">
   <h1>Grand Simulation — MIT Campus Dive</h1>
   <p><b>Heatmap embedded to roads & buildings</b> — 16,512 tiles (daily-average, 12 equal-interval 0.18°C) draped over CARTO Positron streets. <b>Wind corridors</b> pulse continuously (orange = street inflow +grad, teal = thermal wind k×grad). Dive: scroll to zoom, right-drag to pitch/bearing.</p>
   <p class="hint">MIT 42.3601,-71.0942 · Charles River cool strip · Kendall Sq · thermal wind Wallace & Hobbs Eq. 7.20 · Re:Earth free terrain · 3D buildings via MapLibre fill-extrusion</p>
   <div class="row">
     <button id="btnDive" class="pill primary">Dive deep → MIT 3D</button>
+    <button id="btn3D" class="pill">Switch to 2D</button>
     <button id="btnWind" class="pill">Toggle wind</button>
     <button id="btnIso" class="pill">Toggle isotherms</button>
     <button id="btnHeat" class="pill">Heat on/off</button>
@@ -39,9 +44,15 @@
 <script>
 "use strict";
 const MIT = { lon:-71.0942, lat:42.3601 };
+const previewSource = new URLSearchParams(location.search).get("source") || "mock";
+const BASEMAP_STYLE = {
+  version: 8,
+  sources: {},
+  layers: [{ id: "background", type: "background", paint: { "background-color": "#dce7ee" } }]
+};
 const map = new maplibregl.Map({
   container: "map",
-  style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+  style: BASEMAP_STYLE,
   center: [MIT.lon, MIT.lat],
   zoom: 14.2,
   pitch: 58,
@@ -54,13 +65,125 @@ map.addControl(new maplibregl.AttributionControl({compact:true}));
 
 let heatGeo = null, windContours = null, windVectors = null;
 let windOn = true, isoOn = true, heatOn = true;
+let simulationStarted = false;
 
 async function loadHeat() {
-  const qs = new URLSearchParams({district:"mit-campus", date:"2026-08-18", hour:"14", source:"mock"});
+  const qs = new URLSearchParams({district:"mit-campus", date:"2026-08-18", hour:"14", source:previewSource});
   const r = await fetch("/api/analysis?"+qs.toString());
   const j = await r.json();
   return j;
 }
+
+let googleViewer = null;
+let googleHeatPrimitives = [];
+Cesium.RequestScheduler.requestsByServer["tile.googleapis.com:443"] = 18;
+
+function setHeatVisibility(visible) {
+  heatOn = visible;
+  try { map.setPaintProperty("heat-fill", "fill-opacity", visible ? 0.62 : 0); } catch(e) {}
+  googleHeatPrimitives.forEach(primitive => { primitive.show = visible; });
+  document.getElementById("btnHeat").textContent = visible ? "Heat on/off" : "Heat off · click to show";
+}
+
+async function loadGoogle3D() {
+  const button = document.getElementById("btnGoogle");
+  if (!button) return;
+  const config = await fetch("/api/google-config").then(r=>r.json());
+  if (!config.enabled) {
+    button.disabled = true;
+    document.getElementById("status").textContent = "Google 3D unavailable · set GOOGLE_MAPS_API_KEY in .env";
+    return;
+  }
+  button.disabled = false;
+  button.onclick = async () => {
+    if (googleViewer) {
+      document.getElementById("map").style.display = "block";
+      document.getElementById("googleMap").style.display = "none";
+      button.textContent = "Google photorealistic 3D";
+      return;
+    }
+    button.disabled = true;
+    document.getElementById("status").textContent = "Loading Google photorealistic 3D buildings, trees, roads, and terrain…";
+    try {
+      googleViewer = new Cesium.Viewer("googleMap", {
+        animation:false, timeline:false, baseLayerPicker:false, geocoder:false,
+        homeButton:false, navigationHelpButton:false, sceneModePicker:false,
+        fullscreenButton:false, infoBox:false, selectionIndicator:false,
+        creditContainer: document.createElement("div"),
+        imageryProvider: false,
+        globe: false,
+        requestRenderMode: false
+      });
+      const tileset = new Cesium.Cesium3DTileset({
+        url: new Cesium.Resource({
+          url: "https://tile.googleapis.com/v1/3dtiles/root.json",
+          queryParameters: { key: config.api_key }
+        }),
+        showCreditsOnScreen: true
+      });
+      tileset.tileFailed.addEventListener(error => {
+        document.getElementById("status").textContent = "Google 3D tile request failed · check key restrictions and Map Tiles API";
+        console.error(error);
+      });
+      googleViewer.scene.primitives.add(tileset);
+      const data = await loadHeat();
+      const values = (data.tiles || []).map(t=>Number(t.value));
+      const min = Math.min(...values), max = Math.max(...values);
+      const lons = [...new Set((data.tiles || []).map(t=>Number(t.lon)))].sort((a,b)=>a-b);
+      const lats = [...new Set((data.tiles || []).map(t=>Number(t.lat)))].sort((a,b)=>a-b);
+      const lonMin = lons[0] ?? MIT.lon - 0.02;
+      const lonMax = lons.at(-1) ?? MIT.lon + 0.02;
+      const latMin = lats[0] ?? MIT.lat - 0.02;
+      const latMax = lats.at(-1) ?? MIT.lat + 0.02;
+      googleViewer.camera.setView({
+        destination: Cesium.Rectangle.fromDegrees(lonMin, latMin, lonMax, latMax),
+        orientation: { heading: 0.15, pitch: Cesium.Math.toRadians(-52), roll: 0 }
+      });
+      const coordinateStep = coordinates => {
+        const steps = coordinates.slice(1).map((value, index)=>value-coordinates[index]).filter(value=>value>0);
+        return steps.length ? Math.min(...steps) : 0.00064;
+      };
+      const halfLon = coordinateStep(lons) * 0.48;
+      const halfLat = coordinateStep(lats) * 0.48;
+      const heatGeometryInstances = [];
+      for (const tile of data.tiles || []) {
+        const ratio = Math.max(0, Math.min(1, (tile.value-min)/(max-min || 1)));
+        const color = Cesium.Color.fromHsl((195-185*ratio)/360, 0.88, 0.56, 0.38);
+        const geometryInstance = new Cesium.GeometryInstance({
+          geometry: new Cesium.PolygonGeometry({
+            polygonHierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray([
+              tile.lon-halfLon, tile.lat-halfLat, tile.lon+halfLon, tile.lat-halfLat,
+              tile.lon+halfLon, tile.lat+halfLat, tile.lon-halfLon, tile.lat+halfLat
+            ]))
+          }),
+          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(color) }
+        });
+        heatGeometryInstances.push(geometryInstance);
+      }
+      googleHeatPrimitives.push(googleViewer.scene.groundPrimitives.add(new Cesium.GroundPrimitive({
+        geometryInstances: heatGeometryInstances,
+        appearance: new Cesium.PerInstanceColorAppearance({ translucent:true, flat:true }),
+        classificationType: Cesium.ClassificationType.BOTH,
+        show: heatOn
+      })));
+      document.getElementById("map").style.display = "none";
+      document.getElementById("googleMap").style.display = "block";
+      button.textContent = "Back to heatmap renderer";
+      button.disabled = false;
+      document.getElementById("status").textContent = "Google 3D · MIT Campus · satellite imagery + photorealistic buildings, roads, trees, and terrain · temperature drape active";
+    } catch (error) {
+      googleViewer?.destroy();
+      googleViewer = null;
+      button.disabled = false;
+      document.getElementById("status").textContent = "Google 3D failed · check Map Tiles API, billing, key restrictions, and coverage";
+      console.error(error);
+    }
+  };
+}
+
+loadGoogle3D().catch(() => {
+  document.getElementById("status").textContent = "Google 3D configuration unavailable · using the local renderer";
+});
 
 function tempColor(t, min, max) {
   const x = Math.max(0, Math.min(1, (t - min)/(max-min||1)));
@@ -73,7 +196,14 @@ function tempColor(t, min, max) {
   return `rgb(${r},${g},${b})`;
 }
 
-map.on("load", async () => {
+map.on("styledata", async () => {
+  if (simulationStarted) return;
+  simulationStarted = true;
+  // Load street tiles after the style is ready so slow basemap requests cannot block the simulation.
+  try {
+    map.addSource("osm", { type:"raster", tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize:256 });
+    map.addLayer({ id:"osm", type:"raster", source:"osm", paint:{ "raster-opacity":0.88 } });
+  } catch(e){ console.warn("basemap failed", e); }
   // Terrain (Re:Earth raster-dem, free)
   try {
     map.addSource("terrain", { type:"raster-dem", tiles:["https://terrain.reearth.land/mapbox/ellipsoid/{z}/{x}/{y}.png"], tileSize:512, maxzoom:14 });
@@ -160,7 +290,21 @@ map.on("load", async () => {
   document.getElementById("status").textContent = `MIT Campus — ${data.district} · ${data.tile_count_total} tiles · wind corridors continuous (orange=inflow, teal=thermal)`;
 });
 
-document.getElementById("btnDive").onclick = ()=> map.flyTo({center:[MIT.lon,MIT.lat], zoom:15.8, pitch:68, bearing:-12, duration:2200});
+let is3D = true;
+document.getElementById("btnDive").onclick = ()=> { is3D=true; document.getElementById("btn3D").textContent="Switch to 2D"; map.flyTo({center:[MIT.lon,MIT.lat], zoom:15.8, pitch:68, bearing:-12, duration:2200}); if(map.getTerrain()) map.setTerrain({ source:"terrain", exaggeration:1.1 }); };
+document.getElementById("btn3D").onclick = ()=>{
+  is3D = !is3D;
+  const btn=document.getElementById("btn3D");
+  if(is3D){
+    btn.textContent="Switch to 2D";
+    map.easeTo({pitch:58, bearing:-18, duration:800});
+    try{ map.setTerrain({ source:"terrain", exaggeration:1.1 }); }catch(e){}
+  } else {
+    btn.textContent="Switch to 3D";
+    map.easeTo({pitch:0, bearing:0, duration:800});
+    try{ map.setTerrain(null); }catch(e){}
+  }
+};
 document.getElementById("btnWind").onclick = ()=>{
   windOn=!windOn;
   try{ map.setPaintProperty("wind-inflow-line","line-opacity", windOn?0.72:0); map.setPaintProperty("wind-thermal-line","line-opacity", windOn?0.5:0);}catch(e){}
@@ -170,8 +314,7 @@ document.getElementById("btnIso").onclick = ()=>{
   try{ map.setPaintProperty("contours-line","line-opacity", isoOn?0.85:0);}catch(e){}
 };
 document.getElementById("btnHeat").onclick = ()=>{
-  heatOn=!heatOn;
-  try{ map.setPaintProperty("heat-fill","fill-opacity", heatOn?0.62:0);}catch(e){}
+  setHeatVisibility(!heatOn);
 };
 </script>
 </body>
