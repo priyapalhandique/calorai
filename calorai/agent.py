@@ -145,6 +145,16 @@ class AuditAgent:
         wind = max(hour_env.get("wind_speed_m_s", 0.0) or 0.0, 0.0)
         cloud_pct = min(max(hour_env.get("cloud_cover_pct", 0.0) or 0.0, 0.0), 100.0)
         humidity_pct = hour_env.get("humidity_pct", 0.0) or 0.0
+        # N5-a: landcover-aware shade/SVF — committed parcel imagery (San Jose Diridon)
+        # Shade (tree+building) blocks ~60% of direct solar; SVF (sky%) replaces
+        # the model psi_sky for the longwave environment when available.
+        _landcover_early = landcover_block(req.district)
+        if _landcover_early.get("present"):
+            shade_pct = float(_landcover_early.get("shade_pct", 0.0) or 0.0)
+            irradiance = max(0.0, irradiance * (1.0 - shade_pct / 100.0 * 0.6))
+            _landcover_svf_pct: float | None = float(_landcover_early.get("svf_sky_pct", 0.0) or 0.0)
+        else:
+            _landcover_svf_pct = None
         # Wind-aware convection: live API exposes no wind series, so calm
         # conditions (12 W/m²·K) apply there; the mock atmosphere has wind.
         h_c = (
@@ -172,18 +182,30 @@ class AuditAgent:
             if humidity_pct > 0.0
             else None
         )
-        radiative_env_c = (
-            canyon_longwave_environment_c(
-                air_c,
-                humidity_pct,
-                cloud_pct / 100.0,
-                wall_temperature_c=surface_c,
-                h_over_w=self.district.h_over_w,
-                wall_emissivity=EMISSIVITY_DEFAULT,
+        if sky_c is not None and _landcover_svf_pct is not None:
+            # Observed SVF from street-view sky% replaces the model psi_sky.
+            # Recompute the canyon longwave blend with psi = svf/100.
+            psi_obs = max(0.0, min(1.0, _landcover_svf_pct / 100.0))
+            from .physics.radiation import STEFAN_BOLTZMANN
+            from .physics.units import celsius_to_kelvin
+
+            l_sky = STEFAN_BOLTZMANN * celsius_to_kelvin(sky_c) ** 4
+            l_wall = EMISSIVITY_DEFAULT * STEFAN_BOLTZMANN * celsius_to_kelvin(surface_c) ** 4
+            l_env = psi_obs * l_sky + (1.0 - psi_obs) * l_wall
+            radiative_env_c: float | None = (l_env / STEFAN_BOLTZMANN) ** 0.25 - 273.15
+        else:
+            radiative_env_c = (
+                canyon_longwave_environment_c(
+                    air_c,
+                    humidity_pct,
+                    cloud_pct / 100.0,
+                    wall_temperature_c=surface_c,
+                    h_over_w=self.district.h_over_w,
+                    wall_emissivity=EMISSIVITY_DEFAULT,
+                )
+                if sky_c is not None
+                else None
             )
-            if sky_c is not None
-            else None
-        )
 
         slab_capacity = storage_capacity(
             self.district.material_density_kg_m3,
@@ -420,8 +442,8 @@ class AuditAgent:
             "note": "ISA 6.5 K/km; sea-level value for inter-district comparison only — exposure uses raw air",
         }
 
-        # N5-a street-level landcover evidence (satellite + street view, cached).
-        landcover_block_data = landcover_block(req.district)
+        # N5-a street-level landcover evidence (satellite + street view, cached) — reused from early shade/SVF hookup.
+        landcover_block_data = _landcover_early
 
         # N5-b synoptic risk (heat-wave-day / omega-block dome / fire weather) from 24-h env series.
         synoptic_block_data = synoptic_block(

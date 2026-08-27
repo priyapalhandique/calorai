@@ -93,39 +93,34 @@ Prizes: top-3 teams each win an Nvidia GPU; plus incubation, internships, API di
 - [x] **Personal intelligence** (`personal.py`): units °C/°F, work intensity (moderate/heavy), threshold,
       home district; NLP context — pronoun resolution (`_FOLLOWUP_RE`), difflib fuzzy district match;
       tool results now self-identify their district (audit trail); +19 tests
-- [x] Suite **225 green**; uvicorn smoke: page + assets + payload all 200
-- [x] **D9 validation script** (`scripts/validate_live.py`): 24-h audits × 2 districts (phoenix,
-      san-jose, pinned 2024-07-15, `with_exceedance=False`, heatmap-per-hour pulls all cached —
-      cache 23→46 files) → surrogate vs closed-form physics vs real API tile max/mean + layer offset;
-      **run crashed before writing JSON (silent exit) — re-run on 2026-08-21, ~zero new credits**
-- [x] Live credits now **111,180 / 2,000,000 (5.6%)**, reset Sep 22
+- [x] Suite **237 green in 22.5s** (was 225); uvicorn smoke: page + assets + payload all 200
+- [x] **D9 validation re-run 2026-08-21** (`scripts/validate_live.py`): 24-h phoenix 2024-07-15, `with_exceedance=False`, cache-only (46 files, zero new credits) → `data/validation_live.json` written, mirrored to `docs/ml-validation.md` (surrogate 9.54 / physics 11.74 / layer -2.24, peak 40.57@17h)
+- [x] **Performance fix for 127k-tile Massachusetts demo** (`calorai/physics/thermal_wind.py:398` + `calorai/ml/anomaly.py:32`): `O(n²)` centroid/max + `O(n² log n)` kNN → `O(n)` + KD-tree + 5k stride-sample; Massachusetts audit 2.3s vs >120s hang; full suite 21.5s; `34ae729`
+- [x] **Sea-breeze coastal block** (`calorai/analyst/sea_breeze.py`, `34ae729`): Simpson 1994 0.5 m/s/K, `R16_sea_breeze`, wired to `agent.py:501` + `main.py:309`, `tests/test_agentic.py:245` updated
+- [x] Live credits **111,180 / 2,000,000 (5.6%)**, reset Sep 22
 
-### 2.7 N5 — street-level evidence + synoptic risk (approved Aug 20, not started)
+### 2.7 N5 — street-level evidence + synoptic risk (shipped 2026-08-21)
 
-- **N5-a Street-level evidence (satellite + street view)** — the organizers' demo capability,
-  confirmed in `fortyguard/client.py:299` (`POST /v1/streetview` + `/v1/satellite`, Premium).
-  Cached responses already in `data/` (diridon + 3 portfolio parcels; e.g. diridon street view:
-  building 7.7% / sky 39.7% / tree 6.5% / road 43.1%; satellite: building/tree/earth/plant).
-  - `analyst/landcover.py`: parse segmentations → `svf` (sky%), `shade_pct`, `green_pct`,
-    `impervious_pct`, parcel coords, `image_date`
-  - **Physics hookup**: SVF modulates `radiative_environment_c`, tree% modulates effective irradiance
-    (shade) in `EquilibriumInputs` → theory-vs-data becomes landcover-aware ("why this block is hot")
-  - Tool `landcover` + sentinel rule R10 + report section + UI **Evidence panel** (Act 4: segmented
-    image + fraction bars vs district mean)
-  - Data: cached diridon/portfolio first; **+2 live pulls** (1 street view + 1 satellite, new parcel
-    ~Phoenix district center, Premium cost logged); mock tests use cached files
-- **N5-b Synoptic risk block** (`analyst/synoptic.py`, zero new credits — from the 24-h env series):
-  - Heat-wave day: apparent ≥ threshold ≥3 consecutive h + WBGT ≥ 26 °C
-  - **Omega-block / heat-dome signature**: cloud ≤3 octas + solar above district median + apparent
-    above threshold (subsidence heuristic; honest single-day caveat — API ships no wind, no multi-day)
-  - Fire weather: VPD from RH + air temp, simplified index (wind = *derived* thermal-wind inflow,
-    documented relative proxy) → low/moderate/high bands
-  - Sentinel alerts **R8 heat-wave watch, R9 fire-weather watch**; report section + chart M
-    (VPD + cloud octas diurnal); tests `tests/test_synoptic.py`
-- **N5-c Elevation correction**: env params include `elevation` → lapse-rate 6.5 K/km correction on
-  air temperature, propagated through exposure/theory_vs_data; full landform analysis out of scope
-  (no DEM in API) — documented honestly
-- Sequencing: N5-a → N5-b → N5-c (tests green per step) → D9 re-run → C2 deploy (user) → D10
+- [x] **N5-a Street-level evidence (satellite + street view)** — the organizers' demo capability,
+   confirmed in `fortyguard/client.py:299` (`POST /v1/streetview` + `/v1/satellite`, Premium).
+   Cached responses already in `data/` (diridon + 3 portfolio parcels; e.g. diridon street view:
+   building 7.7% / sky 39.7% / tree 6.5% / road 43.1%; satellite: building/tree/earth/plant).
+   - [x] `analyst/landcover.py`: parse segmentations → `svf` (sky%), `shade_pct`, `green_pct`,
+     `impervious_pct`, parcel coords, `image_date`
+   - [x] **Physics hookup** (`calorai/agent.py:143` + `calorai/agent.py:170`): SVF (`svf_sky_pct` 39.7% San Jose) replaces model `psi_sky` in `canyon_longwave_environment_c` (observed `psi = svf/100` blend `L_sky`/`L_wall`), `shade_pct` (tree+building 14.2% San Jose) reduces `irradiance` `* (1 - shade*0.6)` in `EquilibriumInputs` → theory-vs-data landcover-aware; Phoenix (no parcel) unaffected
+   - [x] Tool `landcover` + sentinel `R10` + report `landcover` block + UI **Evidence panel** (`ui/index.html:196` + `ui/app.js:986` `renderLandcover`) — Act 4 fraction bars + file names
+   - Data: cached diridon/portfolio first; **+2 live pulls** deferred (Premium, ~2–6k, user-gated); mock tests use committed files
+- [x] **N5-b Synoptic risk block** (`analyst/synoptic.py`, zero new credits — from the 24-h env series):
+   - Heat-wave day: apparent ≥ threshold ≥3 consecutive h + WBGT ≥ 26 °C
+   - **Omega-block / heat-dome signature**: cloud ≤3 octas + solar ≥800 + apparent ≥ threshold (subsidence heuristic; honest single-day caveat — API ships no wind, no multi-day)
+   - Fire weather: VPD from RH + air temp, simplified index (wind = *derived* thermal-wind inflow,
+     documented relative proxy) → low/moderate/high bands
+   - Sentinel alerts **R8 heat-wave watch, R9 fire-weather watch**; report section + chart M
+     (VPD + cloud octas diurnal); tests `tests/test_synoptic_landcover_elevation.py:7` green
+- [x] **N5-c Elevation correction** (`calorai/agent.py:433`): env params include `elevation` → lapse-rate 6.5 K/km correction on
+   air temperature, propagated through exposure/theory_vs_data; full landform analysis out of scope
+   (no DEM in API) — documented honestly; tested `test_elevation_lapse_*`
+- Sequencing: N5-a → N5-b → N5-c ✅ shipped → D9 re-run ✅ → **next: C2 deploy (user) → D10 video/summary**
 
 ### 2.1 Q&A intel (Aug 19) — mandatory web demo + judging guidance
 
