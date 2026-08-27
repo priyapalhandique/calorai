@@ -21,6 +21,7 @@ from .heatwave_landuse import heatwave_landuse_block
 from .lake_effect import lake_effect_block
 from .pollutants import pollutants_block
 from .resilience import resilience_block
+from .sea_breeze import sea_breeze_block
 from .terrain import flight_overlay, terrain_block
 from .time_machine import time_machine_block
 from .uhi import rank_districts, uhi_prevalence_block
@@ -57,6 +58,7 @@ __all__ = [
     "lake_effect_block",
     "pollutants_block",
     "resilience_block",
+    "sea_breeze_block",
     "terrain_block",
     "time_machine_block",
     "uhi_prevalence_block",

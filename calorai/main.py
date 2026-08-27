@@ -306,6 +306,7 @@ def analysis(
         "geomorphology": report.get("geomorphology", {}),
         "lake_effect": report.get("lake_effect", {}),
         "wind_corridor": report.get("wind_corridor", {}),
+        "sea_breeze": report.get("sea_breeze", {}),
         "time_machine": report.get("time_machine", {}),
         "carbon": report.get("carbon", {}),
         "citizen": report.get("citizen", {}),

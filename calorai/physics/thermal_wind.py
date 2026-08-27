@@ -259,7 +259,8 @@ def gradient_line_field(
         _trace_line(field, (t["lat"], t["lon"]), steps=steps, step_m=step_m)
         for t in picks
     ]
-    hot = [t for t in tiles if t["value"] >= max(t["value"] for t in tiles) - CORE_MARGIN_K]
+    max_v = max(t["value"] for t in tiles)
+    hot = [t for t in tiles if t["value"] >= max_v - CORE_MARGIN_K]
     terminations: dict[str, int] = {}
     for ln in lines:
         terminations[ln["termination"]] = terminations.get(ln["termination"], 0) + 1
@@ -269,7 +270,7 @@ def gradient_line_field(
         "core": {
             "lat": round(float(np.mean([t["lat"] for t in hot])), 6),
             "lon": round(float(np.mean([t["lon"] for t in hot])), 6),
-            "temp_c": round(max(t["value"] for t in tiles), 2),
+            "temp_c": round(max_v, 2),
         },
         "terminations": terminations,
         "lines": lines,
@@ -396,11 +397,15 @@ def urban_circulation(tiles: list[dict], mean_temp_c: float) -> dict[str, Any]:
     # air takes to reach the core.
     corridor_count = 0
     corridor_tiles: list[dict] = []
+    # Precompute centroid once — the previous version recomputed the mean
+    # inside the loop (O(n²)) which hangs for the 127k-tile Massachusetts demo.
+    mean_lon = sum(x["lon"] for x in tiles) / len(tiles)
+    mean_lat = sum(x["lat"] for x in tiles) / len(tiles)
     for t in tiles:
         if t["value"] >= mean_temp_c:
             continue
-        dx = t["lon"] - sum(x["lon"] for x in tiles) / len(tiles)
-        dy = t["lat"] - sum(x["lat"] for x in tiles) / len(tiles)
+        dx = t["lon"] - mean_lon
+        dy = t["lat"] - mean_lat
         if math.hypot(dx, dy) < 1e-9:
             continue
         tile_bearing = _compass_bearing(dx, dy)

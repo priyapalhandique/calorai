@@ -21,6 +21,7 @@ Rules (all thresholded on the report's own numbers):
 - R13 lake_breeze  — lake breeze detected
 - R14 pollutant    — worst pollutant unhealthy band
 - R15 industrial   — industrial heatwave land-use
+- R16 sea_breeze   — sea breeze detected
 """
 
 from __future__ import annotations
@@ -139,6 +140,14 @@ ALERT_RULES: list[dict[str, Any]] = [
         "value": ["unhealthy", "very unhealthy", "unhealthy for sensitive"],
         "severity": "high",
         "message": "Pollutant {value} — heat-driven {value} (O3/PM2.5).",
+    },
+    {
+        "id": "R16_sea_breeze",
+        "field": ("sea_breeze", "sea_breeze"),
+        "op": "in",
+        "value": [True],
+        "severity": "low",
+        "message": "Sea breeze detected {value} — onshore day / offshore night.",
     },
     {
         "id": "R15_industrial_heatwave",

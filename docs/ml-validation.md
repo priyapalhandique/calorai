@@ -47,13 +47,13 @@ the disk cache):
 | Metric | Value |
 |---|---|
 | Surrogate MAE vs observed tile max | 9.54 C |
-| Surrogate MAE vs observed tile mean | 9.50 C |
+| Surrogate MAE vs observed tile mean | 9.03 C |
 | Physics MAE vs observed tile max | 11.74 C |
-| Physics MAE vs observed tile mean | 11.72 C |
+| Physics MAE vs observed tile mean | 11.23 C |
 | Surrogate vs physics MAE | 2.46 C |
 | Layer offset (physics - observed) | -2.24 C |
 
-Peak tile 40.6 C at 17 h vs peak air 41.2 C at 15 h — the API tile
+Peak tile 40.57 C at 17 h vs peak air 41.2 C at 15 h — the API tile
 layer hugs the air temperature curve (canopy/comfort semantics), while
 physics predicts a hotter sunlit **skin** that divides the day.
 

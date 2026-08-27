@@ -105,15 +105,19 @@ function tempColor(t, min, max){
   if(!apiKey){
     if(location.protocol!=="file:") document.getElementById("status").textContent = "No GOOGLE_MAPS_API_KEY — showing Re:Earth fallback + OSM. Add demo key AIzaSyDh-…21pj8 to .env for Google 3D.";
   }
+  const data = await loadHeatTiles();
   viewer = new Cesium.Viewer("cesiumContainer", {
     animation:false, timeline:false, baseLayerPicker:false, geocoder:false,
     homeButton:false, navigationHelpButton:false, sceneModePicker:false,
     fullscreenButton:false, infoBox:false, selectionIndicator:false,
     creditContainer: document.createElement("div"),
     imageryProvider: new Cesium.OpenStreetMapImageryProvider({ url: "https://a.tile.openstreetmap.org/" }),
-    terrainProvider: await Cesium.CesiumTerrainProvider.fromUrl("https://terrain.reearth.land/cesium-mesh/ellipsoid", {requestVertexNormals:true}).catch(()=> new Cesium.EllipsoidTerrainProvider()),
+    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
     requestRenderMode: false
   });
+  Cesium.CesiumTerrainProvider.fromUrl("https://terrain.reearth.land/cesium-mesh/ellipsoid", {requestVertexNormals:true})
+    .then(terrain => { viewer.terrainProvider = terrain; })
+    .catch(() => {});
   viewer.scene.globe.enableLighting = true;
   viewer.scene.globe.depthTestAgainstTerrain = true;
 
@@ -131,7 +135,6 @@ function tempColor(t, min, max){
     }catch(e){ console.warn(e); }
   }
   // Heat tiles — site-scale, aligned to streets/buildings, small high-res active area (custom circle)
-  const data = await loadHeatTiles();
   const tiles = data.tiles || [];
   const heatmap = data.heatmap || {};
   const vmin = heatmap.min_c ?? Math.min(...tiles.map(t=>t.value));

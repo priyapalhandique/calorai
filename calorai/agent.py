@@ -496,6 +496,14 @@ class AuditAgent:
             building_pct=float(sat.get("building", 0.0)) if sat else None,
             sky_pct=float(sv.get("sky", 0.0)) if sv else None,
         )
+        from .analyst.sea_breeze import sea_breeze_block as _sea_block
+
+        sea_breeze_block_data = _sea_block(
+            tiles=heatmap.tiles,
+            district_lat=self.district.lat,
+            district_lon=self.district.lon,
+            district_name=req.district,
+        )
         time_machine_block = _tm_block(
             district=req.district,
             date=req.date,
@@ -638,6 +646,7 @@ class AuditAgent:
             "geomorphology": geo_block,
             "lake_effect": lake_block,
             "wind_corridor": wind_corridor_block_data,
+            "sea_breeze": sea_breeze_block_data,
             "time_machine": time_machine_block,
             "carbon": carbon_block_data,
             "citizen": citizen_block,
