@@ -80,4 +80,4 @@ This document complements `ACKNOWLEDGEMENTS.md`, which separately identifies the
 
 ---
 
-*Prepared for the FortyGuard Hackathon'26 AI-tools disclosure. Claims herein are verifiable against the repository's code, tests (`tests/`, 232 passing at the latest packaging check), and documentation (`docs/physics-references.md`, `README.md`).*
+*Prepared for the FortyGuard Hackathon'26 AI-tools disclosure. Claims herein are verifiable against the repository's code, tests (`tests/`, 237 passing in 22.5s, `tests/conftest.py` mock-pinned, zero-credit), and documentation (`docs/physics-references.md`, `README.md`, `docs/ml-validation.md`).*
