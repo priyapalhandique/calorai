@@ -254,19 +254,41 @@ def analysis(
     """
     from .data_source import MAX_UI_TILES
 
-    try:
-        request = AuditRequest(
-            district=district,
-            date=date,
-            hour=hour,
-            threshold_c=threshold_c,
-            data_source=source,
-            narrator_kind=None,
-        )
-        agent = AuditAgent(request)
-    except (AuditError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    report = agent.run(narrate=False)
+    # auto/live → mock fallback for judge/incognito safety (live 500 or catalog lag → blank UI)
+    last_exc: Exception | None = None
+    # normalize None → auto
+    src = source or "auto"
+    attempts = [src] if src in ("mock", "live") else ["auto", "mock"] if src == "auto" else [src]
+    # for auto we try live first (via resolve_source) then mock
+    if src == "auto":
+        attempts = ["auto", "mock"]
+    report: dict[str, Any] | None = None
+    agent = None
+    for attempt in attempts:
+        try:
+            request = AuditRequest(
+                district=district,
+                date=date,
+                hour=hour,
+                threshold_c=threshold_c,
+                data_source=attempt if attempt != "auto" else None,
+                narrator_kind=None,
+            )
+            agent = AuditAgent(request)
+            report = agent.run(narrate=False)
+            if attempt == "mock" and last_exc is not None:
+                report.setdefault("warnings", []).append(f"live unavailable ({last_exc}); showing mock fallback")
+            break
+        except (AuditError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # live 500, timeout, etc.
+            last_exc = exc
+            if attempt == "mock" or attempts[-1] == attempt:
+                raise HTTPException(status_code=500, detail=f"mock also failed: {exc}") from exc
+            continue
+    assert report is not None and agent is not None
+    if last_exc is not None and report is not None and attempt == "mock":
+        pass  # warning already added
     snapshot = agent.fetch_snapshot()
     heatmap = snapshot.heatmap
     tiles = heatmap.tiles if heatmap else []
