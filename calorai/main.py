@@ -291,10 +291,23 @@ def analysis(
         pass  # warning already added
     snapshot = agent.fetch_snapshot()
     heatmap = snapshot.heatmap
-    tiles = heatmap.tiles if heatmap else []
+    tiles = heatmap.tiles if heatmap and getattr(heatmap, "tiles", None) else []
     n_total = len(tiles)
     stride = max(1, math.ceil(n_total / MAX_UI_TILES))
     shown = tiles[::stride][:MAX_UI_TILES]
+    # Anchorage / live zero-cell returns min=None (n_cells=0) — handle gracefully, don't crash the UI
+    if heatmap and n_total == 0:
+        # live catalog miss: return honest empty heatmap with warning already in report["warnings"]
+        hm_min = hm_mean = hm_max = None
+        hm_units = getattr(heatmap, "units", "celsius")
+    elif heatmap:
+        hm_min = round(heatmap.min, 2) if heatmap.min is not None else None
+        hm_mean = round(heatmap.mean, 2) if heatmap.mean is not None else None
+        hm_max = round(heatmap.max, 2) if heatmap.max is not None else None
+        hm_units = heatmap.units
+    else:
+        hm_min = hm_mean = hm_max = None
+        hm_units = "celsius"
     return {
         "district": report["district"],
         "date": report["date"],
@@ -306,10 +319,10 @@ def analysis(
         "tile_count_total": n_total,
         "tile_count_shown": len(shown),
         "heatmap": {
-            "min_c": round(heatmap.min, 2),
-            "mean_c": round(heatmap.mean, 2),
-            "max_c": round(heatmap.max, 2),
-            "units": heatmap.units,
+            "min_c": hm_min,
+            "mean_c": hm_mean,
+            "max_c": hm_max,
+            "units": hm_units,
         },
         "diurnal": report["diurnal"],
         "attribution": report["attribution"],
