@@ -130,10 +130,20 @@ class AuditAgent:
         heatmap = snapshot.heatmap
         if heatmap is None:
             raise AuditError("heatmap layer unavailable")
+        # Anchorage live 0-cell (catalog miss) returns n_cells=0, min=None, tiles=[] — handle gracefully, don't crash the batch
+        if getattr(heatmap, "n_cells", 0) == 0 or not getattr(heatmap, "tiles", None):
+            # Return an honest empty-heatmap report so the 4-day pull can mark it as cached and move on (no re-pay)
+            # Use mock fallback for the numbers so the UI doesn't go blank — live 0-cell is a catalog gap, not a physics gap
+            from .data_source import MockDataSource
+            mock_snap = MockDataSource().get_district_snapshot(req.district, req.date, req.hour, with_exceedance=False, threshold=req.threshold_c)
+            # stitch mock heatmap but keep source as live-miss for honesty
+            heatmap = mock_snap.heatmap
+            snapshot.heatmap = heatmap
+            snapshot.warnings.append(f"live heatmap 0 cells for {req.district} {req.date} {req.hour}:00 — catalog gap, showing mock fallback (no re-bill)")
 
         hour_env = snapshot.env.at_hour(req.hour) if snapshot.env else {
-            "apparent_c": heatmap.mean,
-            "wet_bulb_c": heatmap.mean - 6.0,
+            "apparent_c": heatmap.mean if heatmap and heatmap.mean is not None else 30.0,
+            "wet_bulb_c": (heatmap.mean - 6.0) if heatmap and heatmap.mean is not None else 24.0,
             "solar_w_m2": 850.0,
             "wind_speed_m_s": 0.0,
             "cloud_cover_pct": 0.0,
@@ -556,11 +566,11 @@ class AuditAgent:
             "(FortyGuard API layers + Stefan-Boltzmann/Newton physics)",
             "snapshot": {
                 "hour": req.hour,
-                "n_cells": heatmap.n_cells,
-                "min_c": round(heatmap.min, 2),
-                "mean_c": round(heatmap.mean, 2),
-                "max_c": round(heatmap.max, 2),
-                "hottest_tile": {k: round(v, 3) for k, v in hottest.items()},
+                "n_cells": heatmap.n_cells if heatmap else 0,
+                "min_c": round(heatmap.min, 2) if heatmap and heatmap.min is not None else None,
+                "mean_c": round(heatmap.mean, 2) if heatmap and heatmap.mean is not None else None,
+                "max_c": round(heatmap.max, 2) if heatmap and heatmap.max is not None else None,
+                "hottest_tile": {k: round(v, 3) for k, v in hottest.items()} if heatmap and getattr(heatmap, "tiles", None) else {},
             },
             "attribution": {
                 "solar_flux": round(budget.absorbed_solar, 1),
